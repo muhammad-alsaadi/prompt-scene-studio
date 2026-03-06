@@ -36,9 +36,14 @@ export default function LandingPage() {
       <nav className="fixed top-0 inset-x-0 z-50 glass">
         <div className="container flex items-center justify-between h-16">
           <span className="font-display text-xl font-bold gradient-text">PromptScene</span>
-          <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard")}>
-            Dashboard
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm" onClick={() => navigate("/auth")}>
+              Sign In
+            </Button>
+            <Button size="sm" className="gradient-primary text-primary-foreground" onClick={handleGetStarted}>
+              Get Started
+            </Button>
+          </div>
         </div>
       </nav>
 
