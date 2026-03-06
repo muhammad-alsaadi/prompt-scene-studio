@@ -14,7 +14,145 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      projects: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      scene_versions: {
+        Row: {
+          created_at: string
+          generated_prompt: string | null
+          id: string
+          image_url: string | null
+          scene_id: string
+          scene_json: Json
+          user_id: string
+          version_number: number
+        }
+        Insert: {
+          created_at?: string
+          generated_prompt?: string | null
+          id?: string
+          image_url?: string | null
+          scene_id: string
+          scene_json?: Json
+          user_id: string
+          version_number?: number
+        }
+        Update: {
+          created_at?: string
+          generated_prompt?: string | null
+          id?: string
+          image_url?: string | null
+          scene_id?: string
+          scene_json?: Json
+          user_id?: string
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scene_versions_scene_id_fkey"
+            columns: ["scene_id"]
+            isOneToOne: false
+            referencedRelation: "scenes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scenes: {
+        Row: {
+          created_at: string
+          generated_image_url: string | null
+          generated_prompt: string | null
+          id: string
+          original_prompt: string | null
+          project_id: string
+          scene_json: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          generated_image_url?: string | null
+          generated_prompt?: string | null
+          id?: string
+          original_prompt?: string | null
+          project_id: string
+          scene_json?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          generated_image_url?: string | null
+          generated_prompt?: string | null
+          id?: string
+          original_prompt?: string | null
+          project_id?: string
+          scene_json?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scenes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
