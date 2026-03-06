@@ -1,24 +1,19 @@
 import { create } from "zustand";
-import { SceneData, SceneVersion, Project, SceneObject } from "@/types/scene";
-import { DEFAULT_SCENE, buildPromptFromScene, parsePromptToScene } from "@/lib/scene-utils";
+import { SceneData, SceneVersion, SceneObject } from "@/types/scene";
+import { DEFAULT_SCENE, buildPromptFromScene } from "@/lib/scene-utils";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface SceneStore {
-  // Current scene
   currentScene: SceneData;
   originalPrompt: string;
   generatedPrompt: string;
   generatedImageUrl: string | null;
   isAnalyzing: boolean;
   isGenerating: boolean;
-
-  // Versions
   versions: SceneVersion[];
-
-  // Projects
-  projects: Project[];
   currentProjectId: string | null;
 
-  // Actions
   setOriginalPrompt: (prompt: string) => void;
   analyzePrompt: () => void;
   updateScene: (scene: Partial<SceneData>) => void;
@@ -33,7 +28,7 @@ interface SceneStore {
   saveVersion: () => void;
   loadVersion: (version: SceneVersion) => void;
   resetScene: () => void;
-  createProject: (name: string, description: string) => void;
+  setCurrentProjectId: (id: string | null) => void;
 }
 
 export const useSceneStore = create<SceneStore>((set, get) => ({
@@ -44,29 +39,38 @@ export const useSceneStore = create<SceneStore>((set, get) => ({
   isAnalyzing: false,
   isGenerating: false,
   versions: [],
-  projects: [
-    {
-      id: "demo-1",
-      name: "Playground Scene",
-      description: "A sunset playground with various elements",
-      scenes: [],
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-  ],
   currentProjectId: null,
 
   setOriginalPrompt: (prompt) => set({ originalPrompt: prompt }),
 
-  analyzePrompt: () => {
+  analyzePrompt: async () => {
     set({ isAnalyzing: true });
     const { originalPrompt } = get();
-    // Simulate AI analysis delay
-    setTimeout(() => {
+
+    try {
+      const { data, error } = await supabase.functions.invoke("analyze-prompt", {
+        body: { prompt: originalPrompt },
+      });
+
+      if (error) throw error;
+
+      if (data?.scene) {
+        const scene = data.scene as SceneData;
+        const generatedPrompt = buildPromptFromScene(scene);
+        set({ currentScene: scene, generatedPrompt, isAnalyzing: false });
+        toast.success("Scene analyzed successfully!");
+      } else {
+        throw new Error("No scene data returned");
+      }
+    } catch (err: any) {
+      console.error("Analysis error:", err);
+      toast.error(err.message || "Failed to analyze prompt");
+      // Fallback to local parser
+      const { parsePromptToScene } = await import("@/lib/scene-utils");
       const scene = parsePromptToScene(originalPrompt);
       const generatedPrompt = buildPromptFromScene(scene);
       set({ currentScene: scene, generatedPrompt, isAnalyzing: false });
-    }, 1200);
+    }
   },
 
   updateScene: (updates) => {
@@ -129,16 +133,29 @@ export const useSceneStore = create<SceneStore>((set, get) => ({
     set({ generatedPrompt: buildPromptFromScene(currentScene) });
   },
 
-  generateImage: () => {
+  generateImage: async () => {
     set({ isGenerating: true });
-    // Simulate image generation
-    setTimeout(() => {
-      set({
-        isGenerating: false,
-        generatedImageUrl: `https://picsum.photos/seed/${Date.now()}/800/600`,
+    const { generatedPrompt } = get();
+
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-image", {
+        body: { prompt: generatedPrompt },
       });
-      get().saveVersion();
-    }, 2500);
+
+      if (error) throw error;
+
+      if (data?.image_url) {
+        set({ generatedImageUrl: data.image_url, isGenerating: false });
+        toast.success("Image generated!");
+        get().saveVersion();
+      } else {
+        throw new Error("No image returned");
+      }
+    } catch (err: any) {
+      console.error("Generation error:", err);
+      toast.error(err.message || "Failed to generate image");
+      set({ isGenerating: false });
+    }
   },
 
   saveVersion: () => {
@@ -170,16 +187,5 @@ export const useSceneStore = create<SceneStore>((set, get) => ({
     });
   },
 
-  createProject: (name, description) => {
-    const { projects } = get();
-    const project: Project = {
-      id: crypto.randomUUID(),
-      name,
-      description,
-      scenes: [],
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    set({ projects: [...projects, project], currentProjectId: project.id });
-  },
+  setCurrentProjectId: (id) => set({ currentProjectId: id }),
 }));

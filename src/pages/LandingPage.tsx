@@ -28,6 +28,7 @@ const features = [
 
 export default function LandingPage() {
   const navigate = useNavigate();
+  const handleGetStarted = () => navigate("/auth");
 
   return (
     <div className="min-h-screen bg-background">
@@ -35,9 +36,14 @@ export default function LandingPage() {
       <nav className="fixed top-0 inset-x-0 z-50 glass">
         <div className="container flex items-center justify-between h-16">
           <span className="font-display text-xl font-bold gradient-text">PromptScene</span>
-          <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard")}>
-            Dashboard
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm" onClick={() => navigate("/auth")}>
+              Sign In
+            </Button>
+            <Button size="sm" className="gradient-primary text-primary-foreground" onClick={handleGetStarted}>
+              Get Started
+            </Button>
+          </div>
         </div>
       </nav>
 
@@ -70,7 +76,7 @@ export default function LandingPage() {
             <Button
               size="lg"
               className="gradient-primary text-primary-foreground font-display text-base px-8 h-12 rounded-xl glow-border"
-              onClick={() => navigate("/builder")}
+              onClick={handleGetStarted}
             >
               Start Creating
               <ArrowRight className="ml-2 h-4 w-4" />
@@ -146,7 +152,7 @@ export default function LandingPage() {
           <Button
             size="lg"
             className="gradient-primary text-primary-foreground font-display px-8 h-12 rounded-xl"
-            onClick={() => navigate("/builder")}
+            onClick={handleGetStarted}
           >
             Open Scene Builder
             <ArrowRight className="ml-2 h-4 w-4" />
