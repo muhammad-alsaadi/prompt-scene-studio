@@ -152,7 +152,7 @@ export default function LandingPage() {
           <Button
             size="lg"
             className="gradient-primary text-primary-foreground font-display px-8 h-12 rounded-xl"
-            onClick={() => navigate("/builder")}
+            onClick={handleGetStarted}
           >
             Open Scene Builder
             <ArrowRight className="ml-2 h-4 w-4" />
