@@ -76,7 +76,7 @@ export default function LandingPage() {
             <Button
               size="lg"
               className="gradient-primary text-primary-foreground font-display text-base px-8 h-12 rounded-xl glow-border"
-              onClick={() => navigate("/builder")}
+              onClick={handleGetStarted}
             >
               Start Creating
               <ArrowRight className="ml-2 h-4 w-4" />
