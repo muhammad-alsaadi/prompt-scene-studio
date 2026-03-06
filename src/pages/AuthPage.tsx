@@ -28,8 +28,6 @@ export default function AuthPage() {
 
     if (error) {
       toast.error(error.message);
-    } else if (isSignUp) {
-      toast.success("Check your email to confirm your account!");
     } else {
       navigate("/dashboard");
     }
