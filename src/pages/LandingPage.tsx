@@ -28,6 +28,7 @@ const features = [
 
 export default function LandingPage() {
   const navigate = useNavigate();
+  const handleGetStarted = () => navigate("/auth");
 
   return (
     <div className="min-h-screen bg-background">
