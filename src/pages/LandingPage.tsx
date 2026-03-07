@@ -91,9 +91,9 @@ export default function LandingPage() {
             className="mt-14 rounded-xl border bg-card shadow-xl overflow-hidden"
           >
             <div className="flex items-center gap-1.5 px-3 py-2 border-b bg-muted/30">
-              <div className="w-2.5 h-2.5 rounded-full bg-destructive/50" />
-              <div className="w-2.5 h-2.5 rounded-full bg-warning/50" />
-              <div className="w-2.5 h-2.5 rounded-full bg-success/50" />
+              <div className="w-2.5 h-2.5 rounded-full bg-destructive/40" />
+              <div className="w-2.5 h-2.5 rounded-full bg-muted-foreground/30" />
+              <div className="w-2.5 h-2.5 rounded-full bg-primary/40" />
               <span className="ml-2 text-[10px] text-muted-foreground">PromptScene Builder</span>
             </div>
             <div className="p-5 text-left font-mono text-xs text-muted-foreground space-y-1">

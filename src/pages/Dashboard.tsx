@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Plus, FolderOpen, Clock, LogOut, Settings, LayoutTemplate, Sparkles } from "lucide-react";
+import { Plus, LogOut, Settings, LayoutTemplate, Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
