@@ -34,7 +34,7 @@ const plans = [
 export default function LandingPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { theme, setTheme } = useTheme();
+  
 
   const handleCTA = () => navigate(user ? "/dashboard" : "/auth");
 
