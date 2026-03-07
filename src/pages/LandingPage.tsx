@@ -3,7 +3,7 @@ import { ArrowRight, Layers, Pencil, Sparkles, Wand2, Check, Star } from "lucide
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
-import { useTheme } from "@/contexts/ThemeContext";
+
 
 const features = [
   { icon: Wand2, title: "AI Scene Analysis", desc: "Paste a prompt. AI breaks it into structured scene components you can edit individually." },
