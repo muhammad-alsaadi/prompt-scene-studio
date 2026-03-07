@@ -97,9 +97,9 @@ export default function LandingPage() {
               <span className="ml-2 text-[10px] text-muted-foreground">PromptScene Builder</span>
             </div>
             <div className="p-5 text-left font-mono text-xs text-muted-foreground space-y-1">
-              <p><span className="text-primary">scene</span>.environment.lighting = <span className="text-green-500 dark:text-green-400">"golden hour"</span></p>
-              <p><span className="text-primary">scene</span>.objects[0].color = <span className="line-through text-destructive/60">"red"</span> → <span className="text-green-500 dark:text-green-400">"blue"</span></p>
-              <p><span className="text-primary">scene</span>.camera.angle = <span className="text-green-500 dark:text-green-400">"low-angle"</span></p>
+              <p><span className="text-primary">scene</span>.environment.lighting = <span className="text-primary/70">"golden hour"</span></p>
+              <p><span className="text-primary">scene</span>.objects[0].color = <span className="line-through text-destructive/60">"red"</span> → <span className="text-primary/70">"blue"</span></p>
+              <p><span className="text-primary">scene</span>.camera.angle = <span className="text-primary/70">"low-angle"</span></p>
               <p className="text-primary pt-1">→ Prompt rebuilt automatically ✓</p>
             </div>
           </motion.div>
