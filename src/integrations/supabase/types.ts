@@ -47,6 +47,7 @@ export type Database = {
           description: string | null
           id: string
           name: string
+          preview_image_url: string | null
           updated_at: string
           user_id: string
         }
@@ -55,6 +56,7 @@ export type Database = {
           description?: string | null
           id?: string
           name: string
+          preview_image_url?: string | null
           updated_at?: string
           user_id: string
         }
@@ -63,6 +65,7 @@ export type Database = {
           description?: string | null
           id?: string
           name?: string
+          preview_image_url?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -73,30 +76,45 @@ export type Database = {
           created_at: string
           generated_prompt: string | null
           id: string
+          image_metadata: Json | null
           image_url: string | null
+          model_info: string | null
           scene_id: string
           scene_json: Json
+          source_prompt: string | null
+          thumbnail_url: string | null
           user_id: string
+          version_label: string | null
           version_number: number
         }
         Insert: {
           created_at?: string
           generated_prompt?: string | null
           id?: string
+          image_metadata?: Json | null
           image_url?: string | null
+          model_info?: string | null
           scene_id: string
           scene_json?: Json
+          source_prompt?: string | null
+          thumbnail_url?: string | null
           user_id: string
+          version_label?: string | null
           version_number?: number
         }
         Update: {
           created_at?: string
           generated_prompt?: string | null
           id?: string
+          image_metadata?: Json | null
           image_url?: string | null
+          model_info?: string | null
           scene_id?: string
           scene_json?: Json
+          source_prompt?: string | null
+          thumbnail_url?: string | null
           user_id?: string
+          version_label?: string | null
           version_number?: number
         }
         Relationships: [
@@ -152,6 +170,72 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      templates: {
+        Row: {
+          category: string
+          created_at: string
+          description: string | null
+          id: string
+          is_featured: boolean
+          preview_url: string | null
+          scene_json: Json
+          sort_order: number
+          starter_prompt: string
+          title: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_featured?: boolean
+          preview_url?: string | null
+          scene_json?: Json
+          sort_order?: number
+          starter_prompt?: string
+          title: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_featured?: boolean
+          preview_url?: string | null
+          scene_json?: Json
+          sort_order?: number
+          starter_prompt?: string
+          title?: string
+        }
+        Relationships: []
+      }
+      usage_events: {
+        Row: {
+          created_at: string
+          credits_used: number
+          event_type: string
+          id: string
+          metadata: Json | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          credits_used?: number
+          event_type: string
+          id?: string
+          metadata?: Json | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          credits_used?: number
+          event_type?: string
+          id?: string
+          metadata?: Json | null
+          user_id?: string
+        }
+        Relationships: []
       }
     }
     Views: {

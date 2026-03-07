@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Plus, FolderOpen, Clock, LogOut } from "lucide-react";
+import { Plus, LogOut, Settings, LayoutTemplate, Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,12 +20,14 @@ interface ProjectRow {
   id: string;
   name: string;
   description: string | null;
+  preview_image_url: string | null;
   created_at: string;
+  updated_at: string;
 }
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { resetScene, versions, setCurrentProjectId } = useSceneStore();
+  const { resetScene } = useSceneStore();
   const { user, signOut } = useAuth();
   const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [newName, setNewName] = useState("");
@@ -37,8 +39,11 @@ export default function Dashboard() {
   }, [user]);
 
   const loadProjects = async () => {
-    const { data } = await supabase.from("projects").select("*").order("updated_at", { ascending: false });
-    if (data) setProjects(data);
+    const { data } = await supabase
+      .from("projects")
+      .select("*")
+      .order("updated_at", { ascending: false });
+    if (data) setProjects(data as ProjectRow[]);
   };
 
   const createProject = async () => {
@@ -51,16 +56,12 @@ export default function Dashboard() {
     if (error) {
       toast.error(error.message);
     } else if (data) {
-      setCurrentProjectId(data.id);
       resetScene();
       setDialogOpen(false);
-      navigate("/builder");
+      setNewName("");
+      setNewDesc("");
+      navigate(`/builder/${data.id}`);
     }
-  };
-
-  const handleProjectClick = (project: ProjectRow) => {
-    setCurrentProjectId(project.id);
-    navigate("/builder");
   };
 
   const handleSignOut = async () => {
@@ -70,17 +71,26 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      <nav className="border-b glass sticky top-0 z-50">
+      <nav className="border-b bg-card/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="container flex items-center justify-between h-14">
-          <span className="font-display text-lg font-bold gradient-text cursor-pointer" onClick={() => navigate("/")}>
+          <span
+            className="font-display text-lg font-bold gradient-text cursor-pointer"
+            onClick={() => navigate("/")}
+          >
             PromptScene
           </span>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground hidden sm:block">{user?.email}</span>
+          <div className="flex items-center gap-1.5">
+            <Button variant="ghost" size="sm" onClick={() => navigate("/templates")}>
+              <LayoutTemplate className="h-4 w-4 mr-1.5" />
+              <span className="hidden sm:inline">Templates</span>
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/settings")}>
+              <Settings className="h-4 w-4" />
+            </Button>
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
                 <Button size="sm" className="gradient-primary text-primary-foreground">
-                  <Plus className="h-4 w-4 mr-1" /> New Scene
+                  <Plus className="h-4 w-4 mr-1" /> New
                 </Button>
               </DialogTrigger>
               <DialogContent>
@@ -96,80 +106,56 @@ export default function Dashboard() {
                 </div>
               </DialogContent>
             </Dialog>
-            <Button variant="ghost" size="icon" onClick={handleSignOut}>
+            <Button variant="ghost" size="icon" onClick={handleSignOut} className="h-8 w-8">
               <LogOut className="h-4 w-4" />
             </Button>
           </div>
         </div>
       </nav>
 
-      <div className="container py-10">
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-          <h1 className="text-3xl font-bold font-display mb-8">Dashboard</h1>
+      <div className="container py-8 max-w-5xl">
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+          <div className="flex items-center justify-between mb-6">
+            <h1 className="text-2xl font-bold font-display">Projects</h1>
+            <span className="text-xs text-muted-foreground">{projects.length} project{projects.length !== 1 ? "s" : ""}</span>
+          </div>
 
-          <section className="mb-12">
-            <h2 className="text-lg font-display font-semibold mb-4 flex items-center gap-2">
-              <FolderOpen className="h-5 w-5 text-primary" /> Projects
-            </h2>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {projects.map((p) => (
-                <div
-                  key={p.id}
-                  className="rounded-xl border bg-card p-5 hover:glow-border transition-shadow cursor-pointer"
-                  onClick={() => handleProjectClick(p)}
-                >
-                  <h3 className="font-display font-semibold mb-1">{p.name}</h3>
-                  <p className="text-sm text-muted-foreground mb-3">{p.description}</p>
-                  <span className="text-xs text-muted-foreground">
-                    {new Date(p.created_at).toLocaleDateString()}
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {projects.map((p) => (
+              <motion.div
+                key={p.id}
+                whileHover={{ y: -2 }}
+                className="rounded-xl border bg-card overflow-hidden cursor-pointer group transition-shadow hover:shadow-md"
+                onClick={() => navigate(`/builder/${p.id}`)}
+              >
+                {p.preview_image_url ? (
+                  <div className="aspect-video bg-muted overflow-hidden">
+                    <img src={p.preview_image_url} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                  </div>
+                ) : (
+                  <div className="aspect-video bg-muted flex items-center justify-center">
+                    <Sparkles className="h-8 w-8 text-muted-foreground/30" />
+                  </div>
+                )}
+                <div className="p-4">
+                  <h3 className="font-display font-semibold text-sm mb-0.5">{p.name}</h3>
+                  {p.description && <p className="text-xs text-muted-foreground line-clamp-1">{p.description}</p>}
+                  <span className="text-[10px] text-muted-foreground mt-2 block">
+                    {new Date(p.updated_at).toLocaleDateString()}
                   </span>
                 </div>
-              ))}
-              <div
-                className="rounded-xl border-2 border-dashed border-border p-5 flex items-center justify-center cursor-pointer hover:border-primary/50 transition-colors"
-                onClick={() => setDialogOpen(true)}
-              >
-                <div className="text-center text-muted-foreground">
-                  <Plus className="h-8 w-8 mx-auto mb-2" />
-                  <span className="text-sm">New Project</span>
-                </div>
+              </motion.div>
+            ))}
+            <div
+              className="rounded-xl border-2 border-dashed border-border flex items-center justify-center cursor-pointer hover:border-primary/40 transition-colors aspect-video sm:aspect-auto sm:min-h-[200px]"
+              onClick={() => setDialogOpen(true)}
+            >
+              <div className="text-center text-muted-foreground">
+                <Plus className="h-6 w-6 mx-auto mb-1.5" />
+                <span className="text-xs">New Project</span>
               </div>
             </div>
-          </section>
-
-          <section>
-            <h2 className="text-lg font-display font-semibold mb-4 flex items-center gap-2">
-              <Clock className="h-5 w-5 text-primary" /> Recent Scenes
-            </h2>
-            {versions.length === 0 ? (
-              <div className="rounded-xl border bg-card p-8 text-center text-muted-foreground">
-                <p>No scenes yet. Create your first scene to get started.</p>
-              </div>
-            ) : (
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {versions.slice(0, 6).map((v) => (
-                  <div
-                    key={v.id}
-                    className="rounded-xl border bg-card overflow-hidden cursor-pointer hover:glow-border transition-shadow"
-                    onClick={() => {
-                      useSceneStore.getState().loadVersion(v);
-                      navigate("/builder");
-                    }}
-                  >
-                    {v.image_url && (
-                      <img src={v.image_url} alt="Scene" className="w-full h-40 object-cover" />
-                    )}
-                    <div className="p-4">
-                      <p className="text-sm font-medium truncate">{v.scene_data.scene_title || "Untitled"}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {new Date(v.created_at).toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
+          </div>
         </motion.div>
       </div>
     </div>

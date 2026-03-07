@@ -4,10 +4,15 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { ThemeProvider } from "@/contexts/ThemeContext";
 import LandingPage from "./pages/LandingPage";
 import Dashboard from "./pages/Dashboard";
 import SceneBuilder from "./pages/SceneBuilder";
 import AuthPage from "./pages/AuthPage";
+import ResetPassword from "./pages/ResetPassword";
+import SettingsPage from "./pages/SettingsPage";
+import TemplatesPage from "./pages/TemplatesPage";
+import PricingPage from "./pages/PricingPage";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 
@@ -19,7 +24,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -32,6 +37,8 @@ const AppRoutes = () => (
   <Routes>
     <Route path="/" element={<LandingPage />} />
     <Route path="/auth" element={<AuthPage />} />
+    <Route path="/reset-password" element={<ResetPassword />} />
+    <Route path="/pricing" element={<PricingPage />} />
     <Route
       path="/dashboard"
       element={
@@ -41,10 +48,26 @@ const AppRoutes = () => (
       }
     />
     <Route
-      path="/builder"
+      path="/builder/:projectId"
       element={
         <ProtectedRoute>
           <SceneBuilder />
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path="/templates"
+      element={
+        <ProtectedRoute>
+          <TemplatesPage />
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path="/settings"
+      element={
+        <ProtectedRoute>
+          <SettingsPage />
         </ProtectedRoute>
       }
     />
@@ -54,17 +77,17 @@ const AppRoutes = () => (
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AuthProvider>
-          <div className="dark">
+    <ThemeProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <AuthProvider>
             <AppRoutes />
-          </div>
-        </AuthProvider>
-      </BrowserRouter>
-    </TooltipProvider>
+          </AuthProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </ThemeProvider>
   </QueryClientProvider>
 );
 
