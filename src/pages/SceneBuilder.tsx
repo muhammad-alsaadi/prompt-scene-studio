@@ -271,7 +271,7 @@ export default function SceneBuilder() {
               <Button
                 className="gradient-primary text-primary-foreground h-7 text-[11px] rounded-md px-3"
                 onClick={handleGenerate}
-                disabled={isGenerating || !generatedPrompt || !canGenerate()}
+                disabled={isGenerating || !generatedPrompt || !canGenerate() || isViewerOnly}
                 size="sm"
               >
                 {isGenerating ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Send className="h-3 w-3 mr-1" />}
