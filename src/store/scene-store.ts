@@ -58,6 +58,9 @@ interface SceneStore {
   setCurrentProjectId: (id: string | null) => void;
   setPreviewTab: (tab: "image" | "prompt" | "json" | "metadata") => void;
   setGenerationMode: (mode: GenerationMode) => void;
+  setSelectedProvider: (provider: string) => void;
+  setSelectedModel: (model: string) => void;
+  setSelectedResolution: (res: "720p" | "1080p" | "2k" | "4k") => void;
   setActiveBrandKit: (kit: SceneStore["activeBrandKit"]) => void;
   setUploadedAssetRefs: (refs: SceneStore["uploadedAssetRefs"]) => void;
   loadProjectScene: (projectId: string) => Promise<void>;
