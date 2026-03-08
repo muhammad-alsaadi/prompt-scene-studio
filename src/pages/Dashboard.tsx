@@ -8,6 +8,8 @@ import { useSceneStore } from "@/store/scene-store";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { usePlan } from "@/hooks/use-plan";
+import { PlanUsageBadge } from "@/components/PlanUsageBadge";
 import {
   Dialog,
   DialogContent,
