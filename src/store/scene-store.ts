@@ -3,6 +3,10 @@ import { SceneData, SceneVersion, SceneObject } from "@/types/scene";
 import { DEFAULT_SCENE, buildPromptFromScene } from "@/lib/scene-utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { GenerationMode } from "@/lib/providers";
+import { invokeGeneration, persistGenerationJob, updateGenerationJob } from "@/lib/generation-client";
+import { buildGenerationJob, enhancePromptForMode, GenerationError } from "@/lib/generation-engine";
+import { PlanId } from "@/lib/plans";
 
 interface SceneStore {
   currentScene: SceneData;
@@ -17,6 +21,14 @@ interface SceneStore {
   selectedObjectId: string | null;
   isDirty: boolean;
   previewTab: "image" | "prompt" | "json" | "metadata";
+
+  // Generation engine state
+  generationMode: GenerationMode;
+  selectedProvider: string;
+  selectedModel: string;
+  selectedResolution: "720p" | "1080p" | "2k" | "4k";
+  lastJobId: string | null;
+  lastCostUnits: number;
 
   setOriginalPrompt: (prompt: string) => void;
   analyzePrompt: () => void;
@@ -33,12 +45,16 @@ interface SceneStore {
   reorderObject: (id: string, direction: "up" | "down") => void;
   selectObject: (id: string | null) => void;
   rebuildPrompt: () => void;
-  generateImage: () => void;
+  generateImage: (plan: PlanId, workspaceId?: string) => void;
   saveVersion: (label?: string) => Promise<void>;
   loadVersion: (version: SceneVersion) => void;
   resetScene: () => void;
   setCurrentProjectId: (id: string | null) => void;
   setPreviewTab: (tab: "image" | "prompt" | "json" | "metadata") => void;
+  setGenerationMode: (mode: GenerationMode) => void;
+  setSelectedProvider: (provider: string) => void;
+  setSelectedModel: (model: string) => void;
+  setSelectedResolution: (res: "720p" | "1080p" | "2k" | "4k") => void;
   loadProjectScene: (projectId: string) => Promise<void>;
   loadVersionsFromDB: (projectId: string) => Promise<void>;
 }
@@ -57,7 +73,18 @@ export const useSceneStore = create<SceneStore>((set, get) => ({
   isDirty: false,
   previewTab: "image",
 
+  generationMode: "scene",
+  selectedProvider: "lovable-ai",
+  selectedModel: "gemini-flash-image",
+  selectedResolution: "1080p",
+  lastJobId: null,
+  lastCostUnits: 0,
+
   setOriginalPrompt: (prompt) => set({ originalPrompt: prompt, isDirty: true }),
+  setGenerationMode: (mode) => set({ generationMode: mode }),
+  setSelectedProvider: (provider) => set({ selectedProvider: provider }),
+  setSelectedModel: (model) => set({ selectedModel: model }),
+  setSelectedResolution: (res) => set({ selectedResolution: res }),
 
   analyzePrompt: async () => {
     set({ isAnalyzing: true });
@@ -72,7 +99,6 @@ export const useSceneStore = create<SceneStore>((set, get) => ({
 
       if (data?.scene) {
         const scene = data.scene as SceneData;
-        // Ensure visibility/locked defaults
         scene.objects = scene.objects.map(o => ({
           ...o,
           visible: o.visible ?? true,
@@ -205,35 +231,85 @@ export const useSceneStore = create<SceneStore>((set, get) => ({
     set({ generatedPrompt: buildPromptFromScene(currentScene) });
   },
 
-  generateImage: async () => {
+  generateImage: async (plan: PlanId, workspaceId?: string) => {
     set({ isGenerating: true });
-    const { generatedPrompt } = get();
+    const { generatedPrompt, currentScene, generationMode, selectedProvider, selectedModel, selectedResolution, currentProjectId } = get();
 
     try {
-      const { data, error } = await supabase.functions.invoke("generate-image", {
-        body: { prompt: generatedPrompt },
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      // Build job
+      const job = buildGenerationJob({
+        userId: user.id,
+        plan,
+        mode: generationMode,
+        scene: currentScene,
+        prompt: enhancePromptForMode(generatedPrompt, generationMode, currentScene),
+        workspaceId,
+        projectId: currentProjectId || undefined,
+        preferredProvider: selectedProvider,
+        preferredModel: selectedModel,
+        resolution: selectedResolution,
       });
 
-      if (error) throw error;
+      // Persist job as pending
+      const jobId = await persistGenerationJob(job);
+      set({ lastJobId: jobId, lastCostUnits: job.costUnits });
 
-      if (data?.image_url) {
-        set({ generatedImageUrl: data.image_url, isGenerating: false, previewTab: "image" });
-        toast.success("Image generated!");
-        get().saveVersion();
-      } else {
-        throw new Error("No image returned");
+      // Call generation
+      const result = await invokeGeneration({
+        prompt: enhancePromptForMode(generatedPrompt, generationMode, currentScene),
+        mode: generationMode,
+        provider: selectedProvider,
+        model: selectedModel,
+        resolution: selectedResolution,
+        sceneJson: currentScene as any,
+        workspaceId,
+        projectId: currentProjectId || undefined,
+      });
+
+      // Update job as completed
+      if (jobId) {
+        await updateGenerationJob(jobId, {
+          status: "completed",
+          outputUrls: [result.image_url],
+          costUnits: result.cost_units,
+        });
       }
+
+      set({
+        generatedImageUrl: result.image_url,
+        isGenerating: false,
+        previewTab: "image",
+        lastCostUnits: result.cost_units,
+      });
+      toast.success("Image generated!");
+      get().saveVersion();
     } catch (err: any) {
       console.error("Generation error:", err);
-      toast.error(err.message || "Failed to generate image");
+
+      // Update job as failed
+      const { lastJobId } = get();
+      if (lastJobId) {
+        await updateGenerationJob(lastJobId, {
+          status: "failed",
+          errorMessage: err.message,
+        });
+      }
+
+      if (err instanceof GenerationError) {
+        toast.error(err.message);
+      } else {
+        toast.error(err.message || "Failed to generate image");
+      }
       set({ isGenerating: false });
     }
   },
 
   saveVersion: async (label?: string) => {
-    const { currentScene, generatedPrompt, generatedImageUrl, originalPrompt, currentProjectId, currentSceneId, versions } = get();
+    const { currentScene, generatedPrompt, generatedImageUrl, originalPrompt, currentProjectId, currentSceneId, versions, generationMode, selectedProvider, selectedModel, lastCostUnits } = get();
 
-    // Save locally
     const version: SceneVersion = {
       id: crypto.randomUUID(),
       scene_data: { ...currentScene },
@@ -241,17 +317,19 @@ export const useSceneStore = create<SceneStore>((set, get) => ({
       source_prompt: originalPrompt,
       image_url: generatedImageUrl || undefined,
       version_label: label,
+      model_info: `${selectedProvider}/${selectedModel}`,
+      generation_mode: generationMode,
+      provider: selectedProvider,
+      cost_units: lastCostUnits,
       created_at: new Date().toISOString(),
     };
     set({ versions: [version, ...versions], isDirty: false });
 
-    // Persist to DB
     if (currentProjectId) {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        // Upsert scene
         let sceneId = currentSceneId;
         if (!sceneId) {
           const { data: sceneData } = await supabase.from("scenes").insert({
@@ -275,7 +353,6 @@ export const useSceneStore = create<SceneStore>((set, get) => ({
           }).eq("id", sceneId);
         }
 
-        // Save version
         if (sceneId) {
           await supabase.from("scene_versions").insert({
             scene_id: sceneId,
@@ -286,10 +363,13 @@ export const useSceneStore = create<SceneStore>((set, get) => ({
             image_url: generatedImageUrl,
             version_label: label || null,
             version_number: versions.length + 1,
+            model_info: `${selectedProvider}/${selectedModel}`,
+            generation_mode: generationMode,
+            provider: selectedProvider,
+            cost_units: lastCostUnits,
           });
         }
 
-        // Update project preview
         if (generatedImageUrl) {
           await supabase.from("projects").update({
             preview_image_url: generatedImageUrl,
@@ -321,6 +401,9 @@ export const useSceneStore = create<SceneStore>((set, get) => ({
       currentSceneId: null,
       isDirty: false,
       previewTab: "image",
+      generationMode: "scene",
+      lastJobId: null,
+      lastCostUnits: 0,
     });
   },
 
@@ -388,10 +471,13 @@ export const useSceneStore = create<SceneStore>((set, get) => ({
           id: v.id,
           scene_data: v.scene_json as unknown as SceneData,
           generated_prompt: v.generated_prompt || "",
-          source_prompt: (v as any).source_prompt || "",
+          source_prompt: v.source_prompt || "",
           image_url: v.image_url || undefined,
-          version_label: (v as any).version_label || undefined,
-          model_info: (v as any).model_info || undefined,
+          version_label: v.version_label || undefined,
+          model_info: v.model_info || undefined,
+          generation_mode: v.generation_mode || undefined,
+          provider: v.provider || undefined,
+          cost_units: v.cost_units || undefined,
           created_at: v.created_at,
         }));
         set({ versions });
