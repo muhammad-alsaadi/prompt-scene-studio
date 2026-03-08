@@ -97,6 +97,8 @@ export const useSceneStore = create<SceneStore>((set, get) => ({
   setSelectedProvider: (provider) => set({ selectedProvider: provider }),
   setSelectedModel: (model) => set({ selectedModel: model }),
   setSelectedResolution: (res) => set({ selectedResolution: res }),
+  setActiveBrandKit: (kit) => set({ activeBrandKit: kit }),
+  setUploadedAssetRefs: (refs) => set({ uploadedAssetRefs: refs }),
 
   analyzePrompt: async () => {
     set({ isAnalyzing: true });
