@@ -10,7 +10,22 @@ export type ObjectType =
   | "uploaded_image"
   | "decorative"
   | "subject"
-  | "background_element";
+  | "background_element"
+  | "rectangle"
+  | "ellipse"
+  | "line"
+  | "pen_path"
+  | "polygon";
+
+export interface PathPoint {
+  x: number;
+  y: number;
+  // Bezier control points (cubic)
+  cx1?: number;
+  cy1?: number;
+  cx2?: number;
+  cy2?: number;
+}
 
 export interface SceneObject {
   id: string;
@@ -55,6 +70,13 @@ export interface SceneObject {
   asset_url?: string;
   native_width?: number;
   native_height?: number;
+  // Vector shape fields
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+  borderRadius?: number;
+  points?: PathPoint[];
+  pathClosed?: boolean;
   // Dynamic fields
   custom_fields?: CustomField[];
 }
