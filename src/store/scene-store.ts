@@ -301,15 +301,58 @@ export const useSceneStore = create<SceneStore>((set, get) => ({
 
       const modeLabel = generationMode === "ad_composition" ? "Ad composition" : generationMode === "advanced_layered" ? "Layered image" : "Image";
 
-      set({
-        generatedImageUrl: result.image_url,
-        isGenerating: false,
-        previewTab: "image",
-        lastCostUnits: result.cost_units,
-        lastLayerOutputs: result.layer_outputs || null,
-        lastGenerationMetadata: result.metadata || null,
-      });
-      toast.success(`${modeLabel} generated!`);
+      // For advanced_layered mode, create canvas objects from layer outputs
+      if (generationMode === "advanced_layered" && result.layer_outputs && result.layer_outputs.length > 0) {
+        const { currentScene } = get();
+        const layerObjects: SceneObject[] = result.layer_outputs.map((layer, i) => ({
+          id: crypto.randomUUID(),
+          name: layer.layerType === "background" ? "Background Layer" : `Layer: ${layer.objectType || `Element ${i}`}`,
+          type: layer.layerType === "background" ? "background_element" : "object",
+          objectType: (layer.layerType === "background" ? "background_element" : (layer.objectType === "text" ? "text" : "uploaded_image")) as any,
+          material: "",
+          color: "",
+          size: "medium",
+          position: "",
+          depth_layer: layer.layerType === "background" ? "background" : "midground",
+          attributes: [],
+          asset_url: layer.assetUrl,
+          x: layer.x ?? 0,
+          y: layer.y ?? 0,
+          width: layer.width ?? 512,
+          height: layer.height ?? 512,
+          zIndex: layer.zIndex ?? i,
+          visible: true,
+          locked: layer.layerType === "background",
+          opacity: 1,
+          importance: layer.layerType === "background" ? "low" as const : "high" as const,
+        }));
+
+        const newScene = {
+          ...currentScene,
+          objects: [...currentScene.objects, ...layerObjects],
+        };
+
+        set({
+          currentScene: newScene,
+          generatedImageUrl: result.image_url,
+          isGenerating: false,
+          previewTab: "image",
+          lastCostUnits: result.cost_units,
+          lastLayerOutputs: result.layer_outputs || null,
+          lastGenerationMetadata: result.metadata || null,
+        });
+        toast.success(`${modeLabel} generated — ${layerObjects.length} layers added to canvas!`);
+      } else {
+        set({
+          generatedImageUrl: result.image_url,
+          isGenerating: false,
+          previewTab: "image",
+          lastCostUnits: result.cost_units,
+          lastLayerOutputs: result.layer_outputs || null,
+          lastGenerationMetadata: result.metadata || null,
+        });
+        toast.success(`${modeLabel} generated!`);
+      }
       get().saveVersion();
     } catch (err: any) {
       console.error("Generation error:", err);
