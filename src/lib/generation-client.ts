@@ -13,11 +13,24 @@ export interface GenerateRequest {
   resolution: string;
   sceneJson: Record<string, unknown>;
   uploadedAssets?: Array<{ assetId: string; url: string; role: string }>;
+  brandKit?: { colors?: string[]; fonts?: string[]; style_notes?: string; logo_url?: string } | null;
   brandKitId?: string;
   layered?: boolean;
   workspaceId?: string;
   projectId?: string;
   artboardId?: string;
+}
+
+export interface LayerOutputData {
+  layerId: string;
+  layerType: "background" | "element";
+  objectType?: string;
+  assetUrl: string;
+  width: number;
+  height: number;
+  x: number;
+  y: number;
+  zIndex: number;
 }
 
 export interface GenerateResponse {
@@ -27,12 +40,7 @@ export interface GenerateResponse {
   provider: string;
   model: string;
   mode: string;
-  layer_outputs?: Array<{
-    layerId: string;
-    assetUrl: string;
-    width: number;
-    height: number;
-  }>;
+  layer_outputs?: LayerOutputData[];
   metadata?: Record<string, unknown>;
 }
 
@@ -46,6 +54,7 @@ export async function invokeGeneration(request: GenerateRequest): Promise<Genera
       resolution: request.resolution,
       scene_json: request.sceneJson,
       uploaded_assets: request.uploadedAssets,
+      brand_kit: request.brandKit || undefined,
       brand_kit_id: request.brandKitId,
       layered: request.layered,
       workspace_id: request.workspaceId,
@@ -55,7 +64,6 @@ export async function invokeGeneration(request: GenerateRequest): Promise<Genera
   });
 
   if (error) {
-    // Parse structured error from edge function
     const msg = error.message || "Generation failed";
     if (msg.includes("Rate limit")) {
       throw new GenerationError("RATE_LIMITED", msg, true);
@@ -124,11 +132,12 @@ export async function persistGenerationJob(job: GenerationJob): Promise<string |
 
 export async function updateGenerationJob(
   jobId: string,
-  updates: { status: string; outputUrls?: string[]; errorMessage?: string; costUnits?: number },
+  updates: { status: string; outputUrls?: string[]; errorMessage?: string; costUnits?: number; layerOutputs?: any[] },
 ): Promise<void> {
   await supabase.from("generation_jobs").update({
     status: updates.status,
     output_urls: updates.outputUrls as any,
+    layer_outputs: updates.layerOutputs as any,
     error_message: updates.errorMessage || null,
     cost_units: updates.costUnits,
     completed_at: new Date().toISOString(),
