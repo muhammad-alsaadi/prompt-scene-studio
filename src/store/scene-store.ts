@@ -29,6 +29,12 @@ interface SceneStore {
   selectedResolution: "720p" | "1080p" | "2k" | "4k";
   lastJobId: string | null;
   lastCostUnits: number;
+  lastLayerOutputs: any[] | null;
+  lastGenerationMetadata: Record<string, unknown> | null;
+
+  // Context for generation
+  activeBrandKit: { id?: string; colors?: string[]; fonts?: string[]; style_notes?: string; logo_url?: string } | null;
+  uploadedAssetRefs: Array<{ assetId: string; url: string; role: string }>;
 
   setOriginalPrompt: (prompt: string) => void;
   analyzePrompt: () => void;
@@ -55,6 +61,8 @@ interface SceneStore {
   setSelectedProvider: (provider: string) => void;
   setSelectedModel: (model: string) => void;
   setSelectedResolution: (res: "720p" | "1080p" | "2k" | "4k") => void;
+  setActiveBrandKit: (kit: SceneStore["activeBrandKit"]) => void;
+  setUploadedAssetRefs: (refs: SceneStore["uploadedAssetRefs"]) => void;
   loadProjectScene: (projectId: string) => Promise<void>;
   loadVersionsFromDB: (projectId: string) => Promise<void>;
 }
@@ -79,12 +87,18 @@ export const useSceneStore = create<SceneStore>((set, get) => ({
   selectedResolution: "1080p",
   lastJobId: null,
   lastCostUnits: 0,
+  lastLayerOutputs: null,
+  lastGenerationMetadata: null,
+  activeBrandKit: null,
+  uploadedAssetRefs: [],
 
   setOriginalPrompt: (prompt) => set({ originalPrompt: prompt, isDirty: true }),
   setGenerationMode: (mode) => set({ generationMode: mode }),
   setSelectedProvider: (provider) => set({ selectedProvider: provider }),
   setSelectedModel: (model) => set({ selectedModel: model }),
   setSelectedResolution: (res) => set({ selectedResolution: res }),
+  setActiveBrandKit: (kit) => set({ activeBrandKit: kit }),
+  setUploadedAssetRefs: (refs) => set({ uploadedAssetRefs: refs }),
 
   analyzePrompt: async () => {
     set({ isAnalyzing: true });
@@ -232,8 +246,8 @@ export const useSceneStore = create<SceneStore>((set, get) => ({
   },
 
   generateImage: async (plan: PlanId, workspaceId?: string) => {
-    set({ isGenerating: true });
-    const { generatedPrompt, currentScene, generationMode, selectedProvider, selectedModel, selectedResolution, currentProjectId } = get();
+    set({ isGenerating: true, lastLayerOutputs: null, lastGenerationMetadata: null });
+    const { generatedPrompt, currentScene, generationMode, selectedProvider, selectedModel, selectedResolution, currentProjectId, activeBrandKit, uploadedAssetRefs } = get();
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -251,13 +265,15 @@ export const useSceneStore = create<SceneStore>((set, get) => ({
         preferredProvider: selectedProvider,
         preferredModel: selectedModel,
         resolution: selectedResolution,
+        uploadedAssets: uploadedAssetRefs.map(a => ({ ...a, role: a.role as any })),
+        brandKitId: activeBrandKit?.id,
       });
 
       // Persist job as pending
       const jobId = await persistGenerationJob(job);
       set({ lastJobId: jobId, lastCostUnits: job.costUnits });
 
-      // Call generation
+      // Call generation with mode-specific data
       const result = await invokeGeneration({
         prompt: enhancePromptForMode(generatedPrompt, generationMode, currentScene),
         mode: generationMode,
@@ -265,6 +281,10 @@ export const useSceneStore = create<SceneStore>((set, get) => ({
         model: selectedModel,
         resolution: selectedResolution,
         sceneJson: currentScene as any,
+        uploadedAssets: uploadedAssetRefs.length > 0 ? uploadedAssetRefs : undefined,
+        brandKit: activeBrandKit ? { colors: activeBrandKit.colors, fonts: activeBrandKit.fonts, style_notes: activeBrandKit.style_notes, logo_url: activeBrandKit.logo_url } : undefined,
+        brandKitId: activeBrandKit?.id,
+        layered: generationMode === "advanced_layered",
         workspaceId,
         projectId: currentProjectId || undefined,
       });
@@ -273,18 +293,23 @@ export const useSceneStore = create<SceneStore>((set, get) => ({
       if (jobId) {
         await updateGenerationJob(jobId, {
           status: "completed",
-          outputUrls: [result.image_url],
+          outputUrls: [result.image_url, ...(result.layer_outputs?.map(l => l.assetUrl) || [])],
           costUnits: result.cost_units,
+          layerOutputs: result.layer_outputs,
         });
       }
+
+      const modeLabel = generationMode === "ad_composition" ? "Ad composition" : generationMode === "advanced_layered" ? "Layered image" : "Image";
 
       set({
         generatedImageUrl: result.image_url,
         isGenerating: false,
         previewTab: "image",
         lastCostUnits: result.cost_units,
+        lastLayerOutputs: result.layer_outputs || null,
+        lastGenerationMetadata: result.metadata || null,
       });
-      toast.success("Image generated!");
+      toast.success(`${modeLabel} generated!`);
       get().saveVersion();
     } catch (err: any) {
       console.error("Generation error:", err);
@@ -404,6 +429,8 @@ export const useSceneStore = create<SceneStore>((set, get) => ({
       generationMode: "scene",
       lastJobId: null,
       lastCostUnits: 0,
+      lastLayerOutputs: null,
+      lastGenerationMetadata: null,
     });
   },
 
