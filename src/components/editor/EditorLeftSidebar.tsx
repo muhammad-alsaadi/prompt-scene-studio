@@ -440,12 +440,29 @@ export function EditorLeftSidebar({ onAddArtboard, projectId }: { onAddArtboard?
         )}
 
         <CollapsibleContent>
+          {/* Mode-specific guidance */}
+          {generationMode === "ad_composition" && currentScene.objects.length === 0 && (
+            <div className="px-3 py-2 border-b bg-primary/5 text-[10px] text-muted-foreground">
+              <p className="font-medium text-primary mb-0.5">Ad Composition Mode</p>
+              <p>Add product images, logos, and text elements. These will be composed with your brand kit into a marketing visual.</p>
+            </div>
+          )}
+          {generationMode === "advanced_layered" && currentScene.objects.length === 0 && (
+            <div className="px-3 py-2 border-b bg-accent/10 text-[10px] text-muted-foreground">
+              <p className="font-medium text-accent-foreground mb-0.5">Layered Mode</p>
+              <p>Add elements to generate as separate layers. Each high/medium importance object becomes its own layer for compositing.</p>
+            </div>
+          )}
           <div className="flex-1 overflow-y-auto px-1.5 py-1">
             {currentScene.objects.length === 0 ? (
               <div className="text-center py-6 text-muted-foreground">
                 <Box className="h-5 w-5 mx-auto mb-1 opacity-30" />
-                <p className="text-[10px]">No objects yet</p>
-                <p className="text-[9px] mt-0.5 opacity-60">Click + or right-click canvas</p>
+                <p className="text-[10px]">
+                  {generationMode === "scene" && "No objects yet"}
+                  {generationMode === "ad_composition" && "No composition elements"}
+                  {generationMode === "advanced_layered" && "No layers defined"}
+                </p>
+                <p className="text-[9px] mt-0.5 opacity-60">Click + to add elements</p>
               </div>
             ) : (
               <div className="space-y-px">
