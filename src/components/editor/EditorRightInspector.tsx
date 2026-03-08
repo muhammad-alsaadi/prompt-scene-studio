@@ -1,5 +1,5 @@
 // Right inspector panel — contextual properties for selected object, artboard, or scene
-import React from "react";
+import React, { useState } from "react";
 import { useSceneStore } from "@/store/scene-store";
 import { useEditorStore } from "@/store/editor-store";
 import { usePlan } from "@/hooks/use-plan";
@@ -12,9 +12,12 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import {
   Sun, Camera, Palette, Box, Type, Move, RotateCw, Maximize2, Layers, Eye, Lock,
   Plus, Trash2, Lightbulb, Paintbrush, MessageSquare, Tag, ChevronDown, ChevronRight, ImageIcon,
+  Eraser, Loader2, Blend,
 } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
