@@ -1,4 +1,4 @@
-// Right inspector panel — contextual properties for selected object, artboard, or scene
+// Right inspector panel — contextual, layer-type-specific properties
 import React, { useState } from "react";
 import { useSceneStore } from "@/store/scene-store";
 import { useEditorStore } from "@/store/editor-store";
@@ -17,7 +17,7 @@ import { toast } from "sonner";
 import {
   Sun, Camera, Palette, Box, Type, Move, RotateCw, Maximize2, Layers, Eye, Lock,
   Plus, Trash2, Lightbulb, Paintbrush, MessageSquare, Tag, ChevronDown, ChevronRight, ImageIcon,
-  Eraser, Loader2, Blend,
+  Eraser, Loader2, Blend, PenTool, Circle, Square, Minus,
 } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
@@ -80,6 +80,46 @@ function TransformInspector({ obj }: { obj: SceneObject }) {
           <Input type="number" value={obj.zIndex ?? 1} onChange={(e) => updateObject(id, { zIndex: Number(e.target.value) })} className="h-7 text-xs" />
         </Field>
       </div>
+    </Section>
+  );
+}
+
+// ─── Layer Compositing ────────────────────────────────────────────
+
+const BLEND_MODES = [
+  "normal", "multiply", "screen", "overlay", "darken", "lighten",
+  "color-dodge", "color-burn", "hard-light", "soft-light", "difference", "exclusion",
+];
+
+function LayerCompositing({ obj }: { obj: SceneObject }) {
+  const { updateObject } = useSceneStore();
+  const [removingBg, setRemovingBg] = React.useState(false);
+  const id = obj.id;
+  const hasImage = obj.objectType === "uploaded_image" || (obj.asset_url && obj.asset_url.length > 0);
+
+  const handleRemoveBackground = async () => {
+    if (!obj.asset_url) return;
+    setRemovingBg(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("remove-background", {
+        body: { image_url: obj.asset_url },
+      });
+      if (error) throw error;
+      if (data?.transparent_url) {
+        updateObject(id, { asset_url: data.transparent_url });
+        toast.success("Background removed!");
+      } else {
+        throw new Error("No result returned");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to remove background");
+    } finally {
+      setRemovingBg(false);
+    }
+  };
+
+  return (
+    <Section icon={Layers} title="Layer">
       <Field label="Opacity">
         <div className="flex items-center gap-2">
           <Slider
@@ -92,11 +132,240 @@ function TransformInspector({ obj }: { obj: SceneObject }) {
           <span className="text-[10px] text-muted-foreground w-7 text-right tabular-nums">{Math.round((obj.opacity ?? 1) * 100)}%</span>
         </div>
       </Field>
+      <Field label="Blend Mode">
+        <Select value={obj.blendMode || "normal"} onValueChange={(v) => updateObject(id, { blendMode: v })}>
+          <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {BLEND_MODES.map(m => <SelectItem key={m} value={m} className="capitalize">{m}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </Field>
+      {hasImage && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full h-7 text-[10px] mt-1"
+          onClick={handleRemoveBackground}
+          disabled={removingBg}
+        >
+          {removingBg ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Eraser className="h-3 w-3 mr-1" />}
+          {removingBg ? "Removing..." : "Remove Background"}
+        </Button>
+      )}
     </Section>
   );
 }
 
-// ─── Appearance Inspector ─────────────────────────────────────────
+// ─── Vector Shape Inspector ───────────────────────────────────────
+
+function VectorShapeInspector({ obj }: { obj: SceneObject }) {
+  const { updateObject } = useSceneStore();
+  const id = obj.id;
+
+  return (
+    <Section icon={Square} title="Shape">
+      <div className="grid grid-cols-2 gap-2">
+        <Field label="Fill">
+          <div className="flex items-center gap-1">
+            <input
+              type="color"
+              value={obj.fill || "#3b82f6"}
+              onChange={(e) => updateObject(id, { fill: e.target.value })}
+              className="w-7 h-7 rounded border border-border cursor-pointer"
+            />
+            <Input
+              value={obj.fill || "#3b82f6"}
+              onChange={(e) => updateObject(id, { fill: e.target.value })}
+              className="h-7 text-xs flex-1"
+            />
+          </div>
+        </Field>
+        <Field label="Stroke">
+          <div className="flex items-center gap-1">
+            <input
+              type="color"
+              value={obj.stroke || "#000000"}
+              onChange={(e) => updateObject(id, { stroke: e.target.value })}
+              className="w-7 h-7 rounded border border-border cursor-pointer"
+            />
+            <Input
+              value={obj.stroke || "#000000"}
+              onChange={(e) => updateObject(id, { stroke: e.target.value })}
+              className="h-7 text-xs flex-1"
+            />
+          </div>
+        </Field>
+      </div>
+      <Field label="Stroke Width">
+        <div className="flex items-center gap-2">
+          <Slider
+            value={[obj.strokeWidth ?? 2]}
+            onValueChange={([v]) => updateObject(id, { strokeWidth: v })}
+            max={20}
+            step={0.5}
+            className="flex-1"
+          />
+          <span className="text-[10px] text-muted-foreground w-6 text-right tabular-nums">{obj.strokeWidth ?? 2}</span>
+        </div>
+      </Field>
+      {obj.objectType === "rectangle" && (
+        <Field label="Border Radius">
+          <div className="flex items-center gap-2">
+            <Slider
+              value={[obj.borderRadius ?? 0]}
+              onValueChange={([v]) => updateObject(id, { borderRadius: v })}
+              max={Math.min(obj.width ?? 120, obj.height ?? 80) / 2}
+              step={1}
+              className="flex-1"
+            />
+            <span className="text-[10px] text-muted-foreground w-6 text-right tabular-nums">{obj.borderRadius ?? 0}</span>
+          </div>
+        </Field>
+      )}
+    </Section>
+  );
+}
+
+// ─── Pen Path Inspector ───────────────────────────────────────────
+
+function PenPathInspector({ obj }: { obj: SceneObject }) {
+  const { updateObject } = useSceneStore();
+  const id = obj.id;
+
+  return (
+    <Section icon={PenTool} title="Path">
+      <div className="grid grid-cols-2 gap-2">
+        <Field label="Fill">
+          <div className="flex items-center gap-1">
+            <input
+              type="color"
+              value={obj.fill || "transparent"}
+              onChange={(e) => updateObject(id, { fill: e.target.value })}
+              className="w-7 h-7 rounded border border-border cursor-pointer"
+            />
+            <Input value={obj.fill || "none"} onChange={(e) => updateObject(id, { fill: e.target.value })} className="h-7 text-xs flex-1" />
+          </div>
+        </Field>
+        <Field label="Stroke">
+          <div className="flex items-center gap-1">
+            <input
+              type="color"
+              value={obj.stroke || "#000000"}
+              onChange={(e) => updateObject(id, { stroke: e.target.value })}
+              className="w-7 h-7 rounded border border-border cursor-pointer"
+            />
+            <Input value={obj.stroke || "#000000"} onChange={(e) => updateObject(id, { stroke: e.target.value })} className="h-7 text-xs flex-1" />
+          </div>
+        </Field>
+      </div>
+      <Field label="Stroke Width">
+        <div className="flex items-center gap-2">
+          <Slider
+            value={[obj.strokeWidth ?? 2]}
+            onValueChange={([v]) => updateObject(id, { strokeWidth: v })}
+            max={20}
+            step={0.5}
+            className="flex-1"
+          />
+          <span className="text-[10px] text-muted-foreground w-6 text-right tabular-nums">{obj.strokeWidth ?? 2}</span>
+        </div>
+      </Field>
+      <div className="flex items-center justify-between">
+        <Label className="text-[10px]">Closed path</Label>
+        <Button
+          variant={obj.pathClosed ? "secondary" : "ghost"}
+          size="sm"
+          className="h-6 text-[10px]"
+          onClick={() => updateObject(id, { pathClosed: !obj.pathClosed })}
+        >
+          {obj.pathClosed ? "Closed" : "Open"}
+        </Button>
+      </div>
+      <p className="text-[9px] text-muted-foreground">{(obj.points || []).length} anchor points</p>
+    </Section>
+  );
+}
+
+// ─── Text Inspector ───────────────────────────────────────────────
+
+function TextInspector({ obj }: { obj: SceneObject }) {
+  const { updateObject } = useSceneStore();
+  const id = obj.id;
+
+  return (
+    <Section icon={Type} title="Text">
+      <Field label="Content">
+        <Textarea
+          value={obj.textContent || ""}
+          onChange={(e) => updateObject(id, { textContent: e.target.value })}
+          className="text-xs min-h-[48px] resize-none"
+          placeholder="Enter text..."
+        />
+      </Field>
+      <div className="grid grid-cols-2 gap-2">
+        <Field label="Font Size">
+          <Input type="number" value={obj.fontSize ?? 16} onChange={(e) => updateObject(id, { fontSize: Number(e.target.value) })} className="h-7 text-xs" />
+        </Field>
+        <Field label="Weight">
+          <Select value={obj.fontWeight || "normal"} onValueChange={(v) => updateObject(id, { fontWeight: v })}>
+            <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {["normal", "medium", "semibold", "bold"].map(w => <SelectItem key={w} value={w}>{w}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field label="Font Family">
+          <Select value={obj.fontFamily || "Inter"} onValueChange={(v) => updateObject(id, { fontFamily: v })}>
+            <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {["Inter", "Space Grotesk", "Arial", "Georgia", "Courier New", "Verdana"].map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field label="Alignment">
+          <Select value={obj.textAlignment || "center"} onValueChange={(v) => updateObject(id, { textAlignment: v as any })}>
+            <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {["left", "center", "right"].map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </Field>
+      </div>
+      <Field label="Color">
+        <div className="flex items-center gap-1">
+          <input
+            type="color"
+            value={obj.textColor || "#000000"}
+            onChange={(e) => updateObject(id, { textColor: e.target.value })}
+            className="w-7 h-7 rounded border border-border cursor-pointer"
+          />
+          <Input value={obj.textColor || "#000000"} onChange={(e) => updateObject(id, { textColor: e.target.value })} className="h-7 text-xs flex-1" />
+        </div>
+      </Field>
+    </Section>
+  );
+}
+
+// ─── Image Inspector ──────────────────────────────────────────────
+
+function ImageInspector({ obj }: { obj: SceneObject }) {
+  if (obj.objectType !== "uploaded_image") return null;
+
+  return (
+    <Section icon={ImageIcon} title="Image" defaultOpen={false}>
+      {obj.asset_url && (
+        <div className="rounded border overflow-hidden">
+          <img src={obj.asset_url} alt="" className="w-full h-auto" />
+        </div>
+      )}
+      {obj.native_width && obj.native_height && (
+        <p className="text-[9px] text-muted-foreground">Original: {obj.native_width}×{obj.native_height}</p>
+      )}
+    </Section>
+  );
+}
+
+// ─── Appearance Inspector (for generic/subject/decorative/background) ──
 
 function AppearanceInspector({ obj }: { obj: SceneObject }) {
   const { updateObject } = useSceneStore();
@@ -149,195 +418,16 @@ function CreativeInspector({ obj }: { obj: SceneObject }) {
         </Select>
       </Field>
       <Field label="Style Description">
-        <Input value={obj.style_description || ""} onChange={(e) => updateObject(id, { style_description: e.target.value })} className="h-7 text-xs" placeholder="Artistic style" />
-      </Field>
-      <Field label="Mood">
-        <Input value={obj.mood || ""} onChange={(e) => updateObject(id, { mood: e.target.value })} className="h-7 text-xs" placeholder="e.g. serene, dramatic" />
-      </Field>
-      <Field label="Lighting Hint">
-        <Input value={obj.lighting_hint || ""} onChange={(e) => updateObject(id, { lighting_hint: e.target.value })} className="h-7 text-xs" placeholder="e.g. rim light" />
+        <Input value={obj.style_description || ""} onChange={(e) => updateObject(id, { style_description: e.target.value })} className="h-7 text-xs" />
       </Field>
       <Field label="Prompt Notes">
-        <Textarea value={obj.prompt_notes || ""} onChange={(e) => updateObject(id, { prompt_notes: e.target.value })} className="text-xs min-h-[48px] resize-none" placeholder="Additional generation hints..." />
-      </Field>
-      <Field label="Negative Notes">
-        <Textarea value={obj.negative_notes || ""} onChange={(e) => updateObject(id, { negative_notes: e.target.value })} className="text-xs min-h-[48px] resize-none" placeholder="What to avoid..." />
+        <Textarea value={obj.prompt_notes || ""} onChange={(e) => updateObject(id, { prompt_notes: e.target.value })} className="text-xs min-h-[48px] resize-none" />
       </Field>
     </Section>
   );
 }
 
-// ─── Text Inspector ───────────────────────────────────────────────
-
-function TextInspector({ obj }: { obj: SceneObject }) {
-  const { updateObject } = useSceneStore();
-  const id = obj.id;
-
-  if (obj.objectType !== "text") return null;
-
-  return (
-    <Section icon={Type} title="Text">
-      <Field label="Content">
-        <Textarea
-          value={obj.textContent || ""}
-          onChange={(e) => updateObject(id, { textContent: e.target.value })}
-          className="text-xs min-h-[48px] resize-none"
-          placeholder="Enter text..."
-        />
-      </Field>
-      <div className="grid grid-cols-2 gap-2">
-        <Field label="Font Size">
-          <Input type="number" value={obj.fontSize ?? 16} onChange={(e) => updateObject(id, { fontSize: Number(e.target.value) })} className="h-7 text-xs" />
-        </Field>
-        <Field label="Weight">
-          <Select value={obj.fontWeight || "normal"} onValueChange={(v) => updateObject(id, { fontWeight: v })}>
-            <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {["normal", "medium", "semibold", "bold"].map(w => <SelectItem key={w} value={w}>{w}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </Field>
-        <Field label="Alignment">
-          <Select value={obj.textAlignment || "center"} onValueChange={(v) => updateObject(id, { textAlignment: v as any })}>
-            <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {["left", "center", "right"].map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </Field>
-        <Field label="Color">
-          <Input value={obj.textColor || ""} onChange={(e) => updateObject(id, { textColor: e.target.value })} className="h-7 text-xs" placeholder="#000000" />
-        </Field>
-      </div>
-    </Section>
-  );
-}
-
-// ─── Custom Fields Inspector ──────────────────────────────────────
-
-function CustomFieldsInspector({ obj }: { obj: SceneObject }) {
-  const { updateObject } = useSceneStore();
-  const { features, requireFeature } = usePlan();
-  const id = obj.id;
-  const fields = obj.custom_fields || [];
-
-  const addField = () => {
-    if (!requireFeature("customFields", "Custom fields")) return;
-    const newField: CustomField = { key: "", value: "", type: "text" };
-    updateObject(id, { custom_fields: [...fields, newField] });
-  };
-
-  const updateField = (idx: number, updates: Partial<CustomField>) => {
-    const updated = fields.map((f, i) => i === idx ? { ...f, ...updates } : f);
-    updateObject(id, { custom_fields: updated });
-  };
-
-  const removeField = (idx: number) => {
-    updateObject(id, { custom_fields: fields.filter((_, i) => i !== idx) });
-  };
-
-  return (
-    <Section icon={Tag} title="Custom Fields" defaultOpen={false}>
-      {!features.customFields ? (
-        <UpgradePrompt feature="Custom fields" planRequired="Pro" compact />
-      ) : (
-        <>
-          {fields.map((f, i) => (
-            <div key={i} className="flex gap-1 items-end">
-              <div className="flex-1">
-                <Input value={f.key} onChange={(e) => updateField(i, { key: e.target.value })} className="h-6 text-[10px]" placeholder="Key" />
-              </div>
-              <div className="flex-1">
-                <Input value={f.value} onChange={(e) => updateField(i, { value: e.target.value })} className="h-6 text-[10px]" placeholder="Value" />
-              </div>
-              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => removeField(i)}>
-                <Trash2 className="h-3 w-3" />
-              </Button>
-            </div>
-          ))}
-          <Button variant="outline" size="sm" className="h-6 text-[10px] w-full" onClick={addField}>
-            <Plus className="h-3 w-3 mr-1" /> Add Field
-          </Button>
-        </>
-      )}
-    </Section>
-  );
-}
-
-// ─── Layer Compositing (Blend Mode + Remove BG) ──────────────────
-
-const BLEND_MODES = [
-  "normal", "multiply", "screen", "overlay", "darken", "lighten",
-  "color-dodge", "color-burn", "hard-light", "soft-light", "difference", "exclusion",
-];
-
-function LayerCompositing({ obj }: { obj: SceneObject }) {
-  const { updateObject } = useSceneStore();
-  const [removingBg, setRemovingBg] = React.useState(false);
-  const id = obj.id;
-  const hasImage = obj.objectType === "uploaded_image" || (obj.asset_url && obj.asset_url.length > 0);
-
-  const handleRemoveBackground = async () => {
-    if (!obj.asset_url) return;
-    setRemovingBg(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("remove-background", {
-        body: { image_url: obj.asset_url },
-      });
-      if (error) throw error;
-      if (data?.transparent_url) {
-        updateObject(id, { asset_url: data.transparent_url });
-        toast.success("Background removed!");
-      } else {
-        throw new Error("No result returned");
-      }
-    } catch (err: any) {
-      console.error("Remove background error:", err);
-      toast.error(err.message || "Failed to remove background");
-    } finally {
-      setRemovingBg(false);
-    }
-  };
-
-  return (
-    <Section icon={Paintbrush} title="Layer">
-      <Field label="Blend Mode">
-        <Select value={obj.blendMode || "normal"} onValueChange={(v) => updateObject(id, { blendMode: v })}>
-          <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {BLEND_MODES.map(m => <SelectItem key={m} value={m} className="capitalize">{m}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </Field>
-      <Field label="Opacity">
-        <div className="flex items-center gap-2">
-          <Slider
-            value={[Math.round((obj.opacity ?? 1) * 100)]}
-            onValueChange={([v]) => updateObject(id, { opacity: v / 100 })}
-            max={100}
-            step={1}
-            className="flex-1"
-          />
-          <span className="text-[10px] text-muted-foreground w-7 text-right tabular-nums">{Math.round((obj.opacity ?? 1) * 100)}%</span>
-        </div>
-      </Field>
-      {hasImage && (
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full h-7 text-[10px] mt-1"
-          onClick={handleRemoveBackground}
-          disabled={removingBg}
-        >
-          {removingBg ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Eraser className="h-3 w-3 mr-1" />}
-          {removingBg ? "Removing..." : "Remove Background"}
-        </Button>
-      )}
-    </Section>
-  );
-}
-
-// ─── Scene Inspector (when nothing selected) ─────────────────────
+// ─── Scene Inspector ─────────────────────────────────────────────
 
 function SceneInspector() {
   const { currentScene, updateEnvironment, updateCamera, updateStyle, updateScene } = useSceneStore();
@@ -442,7 +532,7 @@ export function EditorRightInspector() {
           </span>
         </div>
         <div className="px-3 py-4 text-center text-[11px] text-muted-foreground">
-          Select a single object to edit properties,<br />or use keyboard shortcuts to modify all.
+          Select a single object to edit properties.
         </div>
       </div>
     );
@@ -460,12 +550,20 @@ export function EditorRightInspector() {
   }
 
   const isLocked = selectedObj.locked ?? false;
+  const objType = selectedObj.objectType || "generic";
+  const isVectorShape = ["rectangle", "ellipse", "line", "polygon"].includes(objType);
+  const isPenPath = objType === "pen_path";
+  const isText = objType === "text";
+  const isImage = objType === "uploaded_image";
+  const isGenericScene = ["generic", "subject", "decorative", "background_element"].includes(objType);
 
   return (
     <div className="overflow-y-auto">
       <div className="px-3 py-2 border-b flex items-center justify-between">
         <div>
-          <span className="text-[10px] font-display font-semibold uppercase tracking-wider text-muted-foreground">Object</span>
+          <span className="text-[10px] font-display font-semibold uppercase tracking-wider text-muted-foreground">
+            {isVectorShape ? "Shape" : isPenPath ? "Path" : isText ? "Text" : isImage ? "Image" : "Object"}
+          </span>
           <Input
             value={selectedObj.name || selectedObj.type}
             onChange={(e) => useSceneStore.getState().updateObject(selectedObj.id, { name: e.target.value })}
@@ -485,12 +583,21 @@ export function EditorRightInspector() {
         </div>
       ) : (
         <>
+          {/* All objects get transform */}
           <TransformInspector obj={selectedObj} />
+
+          {/* Layer compositing for all */}
           <LayerCompositing obj={selectedObj} />
-          <AppearanceInspector obj={selectedObj} />
-          {selectedObj.objectType === "text" && <TextInspector obj={selectedObj} />}
-          <CreativeInspector obj={selectedObj} />
-          <CustomFieldsInspector obj={selectedObj} />
+
+          {/* Type-specific inspectors */}
+          {isVectorShape && <VectorShapeInspector obj={selectedObj} />}
+          {isPenPath && <PenPathInspector obj={selectedObj} />}
+          {isText && <TextInspector obj={selectedObj} />}
+          {isImage && <ImageInspector obj={selectedObj} />}
+          {isGenericScene && <AppearanceInspector obj={selectedObj} />}
+
+          {/* Creative hints for scene objects */}
+          {isGenericScene && <CreativeInspector obj={selectedObj} />}
         </>
       )}
     </div>

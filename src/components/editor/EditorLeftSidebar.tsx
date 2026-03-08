@@ -1,13 +1,13 @@
-// Left sidebar: Artboard list + Layer/Object navigator + Brand Kit + Provider
+// Left sidebar: Mode-specific panels, layers, product images, artboards
 import React, { useState, useEffect } from "react";
 import { useSceneStore } from "@/store/scene-store";
 import { useEditorStore } from "@/store/editor-store";
 import { usePlan } from "@/hooks/use-plan";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { PRESET_OBJECTS } from "@/lib/scene-utils";
-import { ARTBOARD_PRESETS } from "@/lib/artboard-presets";
 import { SceneObject, ObjectType } from "@/types/scene";
 import { PROVIDERS, getProvidersForPlan, GENERATION_MODES, getModesForPlan } from "@/lib/providers";
+import { ProductImagesPanel } from "@/components/editor/ProductImagesPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -32,11 +32,12 @@ const OBJ_ICONS: Record<string, typeof Box> = {
   decorative: Star,
   subject: Sparkles,
   background_element: Layers,
+  rectangle: Box,
+  ellipse: Box,
+  line: Box,
+  pen_path: Box,
+  polygon: Box,
 };
-
-function getObjIcon(obj: SceneObject) {
-  return OBJ_ICONS[obj.objectType || "generic"] || Box;
-}
 
 // ─── Layer Row ────────────────────────────────────────────────────
 
@@ -53,6 +54,21 @@ function LayerThumbnail({ obj }: { obj: SceneObject }) {
     return (
       <div className="w-7 h-7 rounded border border-border/50 shrink-0 bg-muted/30 flex items-center justify-center">
         <Type className="h-3 w-3 text-muted-foreground" />
+      </div>
+    );
+  }
+
+  // Vector shapes - show color swatch
+  if (["rectangle", "ellipse", "line", "pen_path", "polygon"].includes(obj.objectType || "")) {
+    return (
+      <div
+        className="w-7 h-7 rounded border border-border/50 shrink-0 flex items-center justify-center"
+        style={{ backgroundColor: obj.fill || "transparent" }}
+      >
+        {obj.objectType === "ellipse" && <div className="w-4 h-4 rounded-full border border-foreground/30" style={{ backgroundColor: obj.fill || "transparent" }} />}
+        {obj.objectType === "rectangle" && <div className="w-4 h-3 border border-foreground/30" style={{ backgroundColor: obj.fill || "transparent" }} />}
+        {obj.objectType === "line" && <div className="w-5 h-0.5 bg-foreground/50 rotate-45" />}
+        {obj.objectType === "pen_path" && <Sparkles className="h-3 w-3 text-muted-foreground" />}
       </div>
     );
   }
@@ -110,7 +126,7 @@ function LayerRow({ obj, index, onDragStart, onDragOver, onDrop }: {
         <TooltipProvider delayDuration={200}>
           <Tooltip>
             <TooltipTrigger asChild>
-              <button className="p-0.5 rounded hover:bg-secondary" onClick={(e) => { e.stopPropagation(); if (!requireFeature("lockHideObjects", "Visibility toggle")) return; toggleObjectVisibility(obj.id); }}>
+              <button className="p-0.5 rounded hover:bg-secondary" onClick={(e) => { e.stopPropagation(); toggleObjectVisibility(obj.id); }}>
                 {isVisible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
               </button>
             </TooltipTrigger>
@@ -118,7 +134,7 @@ function LayerRow({ obj, index, onDragStart, onDragOver, onDrop }: {
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
-              <button className="p-0.5 rounded hover:bg-secondary" onClick={(e) => { e.stopPropagation(); if (!requireFeature("lockHideObjects", "Lock toggle")) return; toggleObjectLock(obj.id); }}>
+              <button className="p-0.5 rounded hover:bg-secondary" onClick={(e) => { e.stopPropagation(); toggleObjectLock(obj.id); }}>
                 {isLocked ? <Lock className="h-3 w-3 text-warning" /> : <Unlock className="h-3 w-3" />}
               </button>
             </TooltipTrigger>
@@ -126,7 +142,7 @@ function LayerRow({ obj, index, onDragStart, onDragOver, onDrop }: {
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
-              <button className="p-0.5 rounded hover:bg-secondary" onClick={(e) => { e.stopPropagation(); if (!requireFeature("duplicateObjects", "Duplicate")) return; duplicateObject(obj.id); }}>
+              <button className="p-0.5 rounded hover:bg-secondary" onClick={(e) => { e.stopPropagation(); duplicateObject(obj.id); }}>
                 <Copy className="h-3 w-3" />
               </button>
             </TooltipTrigger>
@@ -146,18 +162,36 @@ function LayerRow({ obj, index, onDragStart, onDragOver, onDrop }: {
   );
 }
 
-// ─── Add Object Menu ──────────────────────────────────────────────
+// ─── Add Object Menu (mode-specific) ─────────────────────────────
 
-function AddObjectMenu({ onClose }: { onClose: () => void }) {
+function AddObjectMenu({ onClose, mode }: { onClose: () => void; mode: string }) {
   const { addObject } = useSceneStore();
+  const { activeColor, activeStroke, activeStrokeWidth } = useEditorStore();
 
-  const objectTypes: { type: ObjectType; label: string; icon: typeof Box }[] = [
+  // Scene mode: generic objects only
+  const sceneTypes: { type: ObjectType; label: string; icon: typeof Box }[] = [
+    { type: "generic", label: "Object", icon: Box },
+    { type: "subject", label: "Subject", icon: Sparkles },
+    { type: "background_element", label: "Background", icon: Layers },
+  ];
+
+  // Ad Composition: text, decorative, object only
+  const adTypes: { type: ObjectType; label: string; icon: typeof Box }[] = [
+    { type: "text", label: "Text", icon: Type },
+    { type: "decorative", label: "Decorative", icon: Star },
+    { type: "generic", label: "Object", icon: Box },
+  ];
+
+  // Advanced Layered: all types
+  const advancedTypes: { type: ObjectType; label: string; icon: typeof Box }[] = [
     { type: "generic", label: "Object", icon: Box },
     { type: "text", label: "Text", icon: Type },
     { type: "subject", label: "Subject", icon: Sparkles },
     { type: "decorative", label: "Decorative", icon: Star },
     { type: "background_element", label: "Background", icon: Layers },
   ];
+
+  const objectTypes = mode === "scene" ? sceneTypes : mode === "ad_composition" ? adTypes : advancedTypes;
 
   const handleAdd = (objType: ObjectType) => {
     const defaults: Partial<SceneObject> = {
@@ -194,23 +228,6 @@ function AddObjectMenu({ onClose }: { onClose: () => void }) {
           </button>
         ))}
       </div>
-      <div className="mt-2 pt-2 border-t">
-        <span className="text-[9px] text-muted-foreground uppercase tracking-wider font-medium">Presets</span>
-        <div className="flex flex-wrap gap-1 mt-1">
-          {PRESET_OBJECTS.slice(0, 6).map((p) => (
-            <button
-              key={p.type}
-              className="px-2 py-0.5 text-[10px] rounded bg-card border hover:border-primary/30 capitalize"
-              onClick={() => {
-                addObject({ ...p, x: 100 + Math.random() * 200, y: 100 + Math.random() * 200, width: 100, height: 80 });
-                onClose();
-              }}
-            >
-              {p.type}
-            </button>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
@@ -228,7 +245,7 @@ interface ArtboardItem {
 function ArtboardSection({ onAddArtboard, projectId }: { onAddArtboard: () => void; projectId?: string | null }) {
   const [open, setOpen] = useState(true);
   const [artboards, setArtboards] = useState<ArtboardItem[]>([]);
-  const { activeArtboardId, setActiveArtboard } = useEditorStore();
+  const { activeArtboardId, setActiveArtboard, setArtboards: setStoreArtboards } = useEditorStore();
 
   useEffect(() => {
     if (!projectId) return;
@@ -238,11 +255,25 @@ function ArtboardSection({ onAddArtboard, projectId }: { onAddArtboard: () => vo
         .select("id, name, width, height, preset_size")
         .eq("project_id", projectId)
         .order("sort_order", { ascending: true });
-      if (data) setArtboards(data);
+      if (data) {
+        setArtboards(data);
+        // Sync to editor store for canvas rendering
+        setStoreArtboards(data.map((a, i) => ({
+          id: a.id,
+          name: a.name,
+          width: a.width,
+          height: a.height,
+          x: i * (a.width + 100),
+          y: 0,
+          backgroundColor: "#ffffff",
+        })));
+        if (data.length > 0 && !activeArtboardId) {
+          setActiveArtboard(data[0].id);
+        }
+      }
     };
     fetchArtboards();
 
-    // Listen for new artboards via channel
     const channel = supabase
       .channel(`artboards-${projectId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "artboards", filter: `project_id=eq.${projectId}` }, () => {
@@ -312,18 +343,6 @@ function ProviderSection() {
       <CollapsibleContent>
         <div className="px-3 py-2 border-b space-y-2">
           <div>
-            <label className="text-[9px] text-muted-foreground uppercase">Mode</label>
-            <Select value={generationMode} onValueChange={(v) => setGenerationMode(v as any)}>
-              <SelectTrigger className="h-7 text-[10px] mt-0.5"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {GENERATION_MODES.map(m => {
-                  const avail = modes.some(x => x.id === m.id);
-                  return <SelectItem key={m.id} value={m.id} disabled={!avail}>{m.name}{!avail && " ↑"}</SelectItem>;
-                })}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
             <label className="text-[9px] text-muted-foreground uppercase">Provider</label>
             <Select value={selectedProvider} onValueChange={(v) => { setSelectedProvider(v); const p = providers.find(x => x.id === v); if (p?.models[0]) setSelectedModel(p.models[0].id); }}>
               <SelectTrigger className="h-7 text-[10px] mt-0.5"><SelectValue /></SelectTrigger>
@@ -350,73 +369,6 @@ function ProviderSection() {
   );
 }
 
-// ─── Brand Kit Section ────────────────────────────────────────────
-
-function BrandKitSection() {
-  const { user } = useAuth();
-  const { activeWorkspaceId } = useWorkspace();
-  const { features } = usePlan();
-  const [brandKits, setBrandKits] = useState<any[]>([]);
-  const [selectedKit, setSelectedKit] = useState<string | null>(null);
-  const { updateScene, currentScene } = useSceneStore();
-
-  useEffect(() => {
-    if (!user || !features.brandKit) return;
-    supabase.from("brand_kits").select("id, name, colors, logo_url, style_notes")
-      .or(`user_id.eq.${user.id}${activeWorkspaceId ? `,workspace_id.eq.${activeWorkspaceId}` : ""}`)
-      .then(({ data }) => { if (data) setBrandKits(data); });
-  }, [user, activeWorkspaceId, features.brandKit]);
-
-  const applyKit = (kit: any) => {
-    setSelectedKit(kit.id);
-    // Apply brand kit style notes to scene
-    const overrides: Record<string, string> = {};
-    if (kit.style_notes) overrides.brand_style = kit.style_notes;
-    if (kit.colors) {
-      try {
-        const cols = typeof kit.colors === "string" ? JSON.parse(kit.colors) : kit.colors;
-        if (Array.isArray(cols) && cols.length > 0) overrides.brand_colors = cols.join(", ");
-      } catch {}
-    }
-    updateScene({ style_overrides: { ...currentScene.style_overrides, ...overrides } });
-    toast.success(`Applied "${kit.name}" brand kit`);
-  };
-
-  return (
-    <Collapsible defaultOpen={false}>
-      <CollapsibleTrigger className="w-full flex items-center gap-1 px-3 py-2 border-b text-[10px] font-display font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors">
-        <ChevronRight className="h-3 w-3" />
-        <Palette className="h-3 w-3" />
-        Brand Kit
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <div className="px-3 py-2 border-b">
-          {!features.brandKit ? (
-            <UpgradePrompt feature="Brand kits" planRequired="Pro" compact />
-          ) : brandKits.length === 0 ? (
-            <p className="text-[10px] text-muted-foreground">No brand kits yet. Create one in Settings → Assets.</p>
-          ) : (
-            <div className="space-y-1">
-              {brandKits.map(kit => (
-                <button
-                  key={kit.id}
-                  className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-[10px] transition-colors ${
-                    selectedKit === kit.id ? "bg-primary/10 text-primary ring-1 ring-primary/20" : "hover:bg-secondary"
-                  }`}
-                  onClick={() => applyKit(kit)}
-                >
-                  <Palette className="h-3 w-3 shrink-0" />
-                  <span className="truncate">{kit.name}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
-  );
-}
-
 // ─── Main Left Sidebar ───────────────────────────────────────────
 
 export function EditorLeftSidebar({ onAddArtboard, projectId }: { onAddArtboard?: () => void; projectId?: string | null }) {
@@ -426,8 +378,12 @@ export function EditorLeftSidebar({ onAddArtboard, projectId }: { onAddArtboard?
   const [layersOpen, setLayersOpen] = useState(true);
   const dragRef = React.useRef<number | null>(null);
 
-  // Drag reorder handlers (operate on reversed display indices → real indices)
   const reversedObjects = [...currentScene.objects].reverse();
+
+  // Filter objects based on mode for Ad Composition
+  const displayObjects = generationMode === "ad_composition"
+    ? reversedObjects.filter(o => ["text", "decorative", "generic", "uploaded_image"].includes(o.objectType || "generic"))
+    : reversedObjects;
 
   const handleLayerDragStart = (e: React.DragEvent, displayIdx: number) => {
     dragRef.current = displayIdx;
@@ -451,26 +407,34 @@ export function EditorLeftSidebar({ onAddArtboard, projectId }: { onAddArtboard?
 
   const atLimit = features.maxObjectsPerArtboard > 0 && currentScene.objects.length >= features.maxObjectsPerArtboard;
 
+  const layerTitle = generationMode === "scene"
+    ? "Scene Objects"
+    : generationMode === "ad_composition"
+    ? "Composition Elements"
+    : "Layer Stack";
+
   return (
     <div className="flex flex-col h-full">
-      {/* Artboard */}
-      <ArtboardSection onAddArtboard={onAddArtboard || (() => toast.info("Multi-artboard coming soon"))} projectId={projectId} />
+      {/* Artboards — show in ad_composition and advanced_layered modes */}
+      {generationMode !== "scene" && (
+        <ArtboardSection onAddArtboard={onAddArtboard || (() => toast.info("Click + in the toolbar"))} projectId={projectId} />
+      )}
 
       {/* Provider & Model */}
       <ProviderSection />
 
-      {/* Brand Kit */}
-      <BrandKitSection />
+      {/* Product Images — Ad Composition only */}
+      {generationMode === "ad_composition" && (
+        <ProductImagesPanel projectId={projectId} />
+      )}
 
-      {/* Layers Section — mode-specific header */}
+      {/* Layers Section */}
       <Collapsible open={layersOpen} onOpenChange={setLayersOpen}>
         <div className="flex items-center justify-between px-3 py-2 border-b">
           <CollapsibleTrigger className="flex items-center gap-1 text-[10px] font-display font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors">
             {layersOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-            {generationMode === "scene" && "Scene Objects"}
-            {generationMode === "ad_composition" && "Composition Elements"}
-            {generationMode === "advanced_layered" && "Layer Stack"}
-            <span className="text-[9px] font-normal ml-1 tabular-nums">({currentScene.objects.length})</span>
+            {layerTitle}
+            <span className="text-[9px] font-normal ml-1 tabular-nums">({displayObjects.length})</span>
           </CollapsibleTrigger>
           <Button
             size="sm"
@@ -489,7 +453,7 @@ export function EditorLeftSidebar({ onAddArtboard, projectId }: { onAddArtboard?
           </Button>
         </div>
 
-        {showAddMenu && <AddObjectMenu onClose={() => setShowAddMenu(false)} />}
+        {showAddMenu && <AddObjectMenu onClose={() => setShowAddMenu(false)} mode={generationMode} />}
 
         {atLimit && (
           <div className="px-3 py-1.5 border-b">
@@ -498,33 +462,28 @@ export function EditorLeftSidebar({ onAddArtboard, projectId }: { onAddArtboard?
         )}
 
         <CollapsibleContent>
-          {/* Mode-specific guidance */}
-          {generationMode === "ad_composition" && currentScene.objects.length === 0 && (
+          {generationMode === "ad_composition" && displayObjects.length === 0 && (
             <div className="px-3 py-2 border-b bg-primary/5 text-[10px] text-muted-foreground">
               <p className="font-medium text-primary mb-0.5">Ad Composition Mode</p>
-              <p>Add product images, logos, and text elements. These will be composed with your brand kit into a marketing visual.</p>
+              <p>Add product images above, then add text & decorative elements here.</p>
             </div>
           )}
           {generationMode === "advanced_layered" && currentScene.objects.length === 0 && (
             <div className="px-3 py-2 border-b bg-accent/10 text-[10px] text-muted-foreground">
               <p className="font-medium text-accent-foreground mb-0.5">Layered Mode</p>
-              <p>Add elements to generate as separate layers. Each high/medium importance object becomes its own layer for compositing.</p>
+              <p>Add elements to generate as separate layers for compositing.</p>
             </div>
           )}
           <div className="flex-1 overflow-y-auto px-1.5 py-1">
-            {currentScene.objects.length === 0 ? (
+            {displayObjects.length === 0 ? (
               <div className="text-center py-6 text-muted-foreground">
                 <Box className="h-5 w-5 mx-auto mb-1 opacity-30" />
-                <p className="text-[10px]">
-                  {generationMode === "scene" && "No objects yet"}
-                  {generationMode === "ad_composition" && "No composition elements"}
-                  {generationMode === "advanced_layered" && "No layers defined"}
-                </p>
+                <p className="text-[10px]">No elements yet</p>
                 <p className="text-[9px] mt-0.5 opacity-60">Click + to add elements</p>
               </div>
             ) : (
               <div className="space-y-px">
-                {reversedObjects.map((obj, i) => (
+                {displayObjects.map((obj, i) => (
                   <LayerRow
                     key={obj.id}
                     obj={obj}
