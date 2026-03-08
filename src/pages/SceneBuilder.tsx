@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
-import { motion } from "framer-motion";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   ArrowLeft, Sparkles, Image as ImageIcon, Loader2, Send,
   PanelLeftClose, PanelRightClose, Save, Clock,
   Layers, Layout, Zap, Undo2, Redo2, Grid3X3, Magnet,
   ZoomIn, ZoomOut, RotateCcw, Plus, Hand, MousePointer,
+  PenTool, Square, Circle, Minus, Pipette, Download,
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -15,11 +15,12 @@ import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useSceneStore } from "@/store/scene-store";
-import { useEditorStore } from "@/store/editor-store";
+import { useEditorStore, EditorTool } from "@/store/editor-store";
 import { EditorLeftSidebar } from "@/components/editor/EditorLeftSidebar";
 import { EditorRightInspector } from "@/components/editor/EditorRightInspector";
 import { WorkspaceCanvas } from "@/components/editor/WorkspaceCanvas";
 import { VersionHistoryPanel } from "@/components/scene/VersionHistoryPanel";
+import { ExportDialog } from "@/components/editor/ExportDialog";
 import { PlanUsageBadge } from "@/components/PlanUsageBadge";
 import { usePlan } from "@/hooks/use-plan";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
@@ -39,6 +40,17 @@ const MODE_ICONS: Record<GenerationMode, typeof ImageIcon> = {
   advanced_layered: Layers,
 };
 
+// Tool definitions for the toolbar
+const DRAWING_TOOLS: { id: EditorTool; icon: typeof Square; label: string; shortcut?: string }[] = [
+  { id: "select", icon: MousePointer, label: "Select", shortcut: "V" },
+  { id: "hand", icon: Hand, label: "Hand", shortcut: "H" },
+  { id: "rectangle", icon: Square, label: "Rectangle", shortcut: "R" },
+  { id: "ellipse", icon: Circle, label: "Ellipse", shortcut: "O" },
+  { id: "line", icon: Minus, label: "Line", shortcut: "L" },
+  { id: "pen", icon: PenTool, label: "Pen", shortcut: "P" },
+  { id: "color_picker", icon: Pipette, label: "Color Picker", shortcut: "I" },
+];
+
 export default function SceneBuilder() {
   const navigate = useNavigate();
   const { projectId } = useParams<{ projectId: string }>();
@@ -47,6 +59,7 @@ export default function SceneBuilder() {
   const [showRight, setShowRight] = useState(true);
   const [projectName, setProjectName] = useState("");
   const [addArtboardOpen, setAddArtboardOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [artboardPreset, setArtboardPreset] = useState("ig-post");
   const [artboardName, setArtboardName] = useState("Artboard 1");
   const [artboardW, setArtboardW] = useState(1024);
@@ -65,11 +78,26 @@ export default function SceneBuilder() {
   const {
     canvasZoom, undoStack, redoStack, undo, redo, snapEnabled, showGrid,
     toggleSnap, toggleGrid, zoomIn, zoomOut, resetView, activeTool, setActiveTool, spaceHeld,
+    activeColor, setActiveColor, activeStroke, setActiveStroke,
   } = useEditorStore();
   const { canGenerate, consumeCredits, plan, workspaceId } = usePlan();
   const { activeWorkspace, userRole } = useWorkspace();
   const isViewerOnly = activeWorkspace?.type === "team" && userRole === "viewer";
   const availableModes = getModesForPlan(plan);
+
+  // Auto-save with debounce
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (isDirty && projectId) {
+      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+      autoSaveTimer.current = setTimeout(() => {
+        saveVersion("Auto-save");
+      }, 5000);
+    }
+    return () => {
+      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    };
+  }, [isDirty, currentScene]);
 
   useEffect(() => {
     if (!projectId) { navigate("/dashboard"); return; }
@@ -81,6 +109,30 @@ export default function SceneBuilder() {
       else navigate("/dashboard");
     });
   }, [projectId]);
+
+  // Keyboard shortcuts for tools
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      const key = e.key.toLowerCase();
+      if (key === "r") setActiveTool("rectangle");
+      if (key === "o") setActiveTool("ellipse");
+      if (key === "l") setActiveTool("line");
+      if (key === "p") setActiveTool("pen");
+      if (key === "i") setActiveTool("color_picker");
+      if (key === "h") setActiveTool("hand");
+      if (key === "v") setActiveTool("select");
+      if (key === "t") {
+        // Quick add text
+        useSceneStore.getState().addObject({
+          type: "text", objectType: "text", textContent: "Edit me",
+          x: 100, y: 100, width: 200, height: 40, fontSize: 16,
+        });
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   const handleGenerate = async () => {
     if (!canGenerate()) {
@@ -127,10 +179,6 @@ export default function SceneBuilder() {
     if (error) { toast.error(error.message); return; }
     toast.success(`Artboard "${artboardName}" created`);
     setAddArtboardOpen(false);
-
-    // Update canvas dimensions to new artboard
-    setArtboardW(data.width);
-    setArtboardH(data.height);
   };
 
   const handlePresetChange = (presetId: string) => {
@@ -186,30 +234,52 @@ export default function SceneBuilder() {
         {/* Right: Tools */}
         <TooltipProvider delayDuration={300}>
           <div className="hidden md:flex items-center gap-0.5">
-            {/* Tool mode */}
+            {/* Drawing tools */}
+            {DRAWING_TOOLS.map(tool => (
+              <Tooltip key={tool.id}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={activeTool === tool.id && !spaceHeld ? "secondary" : "ghost"}
+                    size="icon" className="h-7 w-7"
+                    onClick={() => setActiveTool(tool.id)}
+                  >
+                    <tool.icon className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent className="text-[10px]">{tool.label} ({tool.shortcut})</TooltipContent>
+              </Tooltip>
+            ))}
+
+            <Separator orientation="vertical" className="h-4 mx-0.5" />
+
+            {/* Color swatches */}
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
-                  variant={activeTool === "select" && !spaceHeld ? "secondary" : "ghost"}
-                  size="icon" className="h-7 w-7"
-                  onClick={() => setActiveTool("select")}
-                >
-                  <MousePointer className="h-3.5 w-3.5" />
-                </Button>
+                <div className="relative h-7 w-7 flex items-center justify-center">
+                  <input
+                    type="color"
+                    value={activeColor}
+                    onChange={(e) => setActiveColor(e.target.value)}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                  <div className="w-4 h-4 rounded-sm border border-border" style={{ backgroundColor: activeColor }} />
+                </div>
               </TooltipTrigger>
-              <TooltipContent className="text-[10px]">Select (V)</TooltipContent>
+              <TooltipContent className="text-[10px]">Fill color</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
-                  variant={activeTool === "hand" || spaceHeld ? "secondary" : "ghost"}
-                  size="icon" className="h-7 w-7"
-                  onClick={() => setActiveTool(activeTool === "hand" ? "select" : "hand")}
-                >
-                  <Hand className="h-3.5 w-3.5" />
-                </Button>
+                <div className="relative h-7 w-7 flex items-center justify-center">
+                  <input
+                    type="color"
+                    value={activeStroke}
+                    onChange={(e) => setActiveStroke(e.target.value)}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                  <div className="w-4 h-4 rounded-sm border-2" style={{ borderColor: activeStroke, backgroundColor: "transparent" }} />
+                </div>
               </TooltipTrigger>
-              <TooltipContent className="text-[10px]">Hand tool (Space)</TooltipContent>
+              <TooltipContent className="text-[10px]">Stroke color</TooltipContent>
             </Tooltip>
 
             <Separator orientation="vertical" className="h-4 mx-0.5" />
@@ -285,14 +355,12 @@ export default function SceneBuilder() {
 
       {/* ─── Main Layout ──────────────────────────────────────── */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar */}
         {showLeft && (
           <aside className="w-56 border-r bg-card/50 overflow-y-auto shrink-0 hidden md:block">
             <EditorLeftSidebar onAddArtboard={handleAddArtboard} projectId={projectId} />
           </aside>
         )}
 
-        {/* Center: Canvas + Bottom Bar */}
         <main className="flex-1 flex flex-col overflow-hidden">
           <WorkspaceCanvas
             artboardWidth={artboardW}
@@ -344,6 +412,16 @@ export default function SceneBuilder() {
 
             <div className="flex items-center gap-2">
               <PlanUsageBadge />
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-[10px]"
+                onClick={() => setExportOpen(true)}
+              >
+                <Download className="h-3 w-3 mr-1" /> Export
+              </Button>
+
               <Button
                 className="gradient-primary text-primary-foreground h-7 text-[11px] rounded-md px-3"
                 onClick={handleGenerate}
@@ -357,7 +435,6 @@ export default function SceneBuilder() {
           </div>
         </main>
 
-        {/* Right Sidebar */}
         {showRight && (
           <aside className="w-64 border-l bg-card/50 overflow-y-auto shrink-0 hidden md:block">
             {rightPanel === "inspector" ? <EditorRightInspector /> : <VersionHistoryPanel />}
@@ -403,6 +480,15 @@ export default function SceneBuilder() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Export Dialog */}
+      <ExportDialog
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        artboardWidth={artboardW}
+        artboardHeight={artboardH}
+        generatedImageUrl={generatedImageUrl}
+      />
     </div>
   );
 }
