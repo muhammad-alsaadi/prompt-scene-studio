@@ -81,6 +81,9 @@ export default function SceneBuilder() {
           <span className="text-muted-foreground text-xs">/</span>
           <span className="text-xs font-medium truncate max-w-[120px]">{projectName}</span>
           {isDirty && <span className="w-1.5 h-1.5 rounded-full bg-warning" title="Unsaved changes" />}
+          <PlanUsageBadge />
+        </div>
+          {isDirty && <span className="w-1.5 h-1.5 rounded-full bg-warning" title="Unsaved changes" />}
         </div>
 
         <div className="flex-1 mx-2">
