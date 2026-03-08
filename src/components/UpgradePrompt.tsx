@@ -1,6 +1,7 @@
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { TELEGRAM_PAYMENT_URL } from "@/lib/plans";
-import { ExternalLink, Sparkles } from "lucide-react";
+import { Sparkles, ArrowRight } from "lucide-react";
 
 interface UpgradePromptProps {
   feature: string;
@@ -9,11 +10,13 @@ interface UpgradePromptProps {
 }
 
 export function UpgradePrompt({ feature, planRequired = "Pro", compact = false }: UpgradePromptProps) {
+  const navigate = useNavigate();
+
   if (compact) {
     return (
       <button
         className="inline-flex items-center gap-1 text-[10px] text-primary hover:underline"
-        onClick={() => window.open(TELEGRAM_PAYMENT_URL, "_blank")}
+        onClick={() => navigate("/pricing")}
       >
         <Sparkles className="h-2.5 w-2.5" />
         {planRequired}
@@ -22,16 +25,16 @@ export function UpgradePrompt({ feature, planRequired = "Pro", compact = false }
   }
 
   return (
-    <div className="rounded-lg border border-primary/10 bg-primary/5 p-3 text-center">
-      <Sparkles className="h-4 w-4 text-primary mx-auto mb-1.5" />
+    <div className="rounded-xl border border-primary/10 bg-primary/5 p-4 text-center">
+      <Sparkles className="h-5 w-5 text-primary mx-auto mb-2" />
       <p className="text-xs font-medium mb-0.5">{feature} requires {planRequired}</p>
-      <p className="text-[10px] text-muted-foreground mb-2">Upgrade to unlock this feature</p>
+      <p className="text-[10px] text-muted-foreground mb-3">Upgrade your plan to unlock this feature.</p>
       <Button
         size="sm"
-        className="h-6 text-[10px] px-3 gradient-primary text-primary-foreground"
-        onClick={() => window.open(TELEGRAM_PAYMENT_URL, "_blank")}
+        className="h-7 text-[10px] px-4 gradient-primary text-primary-foreground"
+        onClick={() => navigate("/pricing")}
       >
-        <ExternalLink className="h-2.5 w-2.5 mr-1" /> Upgrade
+        View Plans <ArrowRight className="h-2.5 w-2.5 ml-1" />
       </Button>
     </div>
   );
