@@ -88,6 +88,7 @@ export default function Dashboard() {
             PromptScene
           </span>
           <div className="flex items-center gap-1.5">
+            <PlanUsageBadge />
             <Button variant="ghost" size="sm" onClick={() => navigate("/templates")}>
               <LayoutTemplate className="h-4 w-4 mr-1.5" />
               <span className="hidden sm:inline">Templates</span>
