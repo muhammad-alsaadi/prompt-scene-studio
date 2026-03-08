@@ -341,9 +341,10 @@ export function WorkspaceCanvas({ artboardWidth = 1024, artboardHeight = 1024, a
     setHovered, hoveredId, snapEnabled, showGrid, spaceHeld, openContextMenu, closeContextMenu,
     zoomToFit,
   } = useEditorStore();
-  const { currentScene, updateObject } = useSceneStore();
+  const { currentScene, updateObject, addObject } = useSceneStore();
   const containerRef = useRef<HTMLDivElement>(null);
   const [panning, setPanning] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const panStart = useRef({ x: 0, y: 0, px: 0, py: 0 });
   const [fitted, setFitted] = useState(false);
 
