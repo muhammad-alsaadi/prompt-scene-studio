@@ -1,18 +1,19 @@
-import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState, useEffect, useCallback } from "react";
+import { motion } from "framer-motion";
 import {
   ArrowLeft, Sparkles, Image as ImageIcon, Loader2, Send,
-  PanelLeftClose, PanelRightClose, Save, Clock, FileJson, FileText,
-  Info, Layers, Layout, Zap, Undo2, Redo2, Grid3X3, Magnet,
-  ZoomIn, ZoomOut, RotateCcw,
+  PanelLeftClose, PanelRightClose, Save, Clock,
+  Layers, Layout, Zap, Undo2, Redo2, Grid3X3, Magnet,
+  ZoomIn, ZoomOut, RotateCcw, Plus, Hand, MousePointer,
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { useSceneStore } from "@/store/scene-store";
 import { useEditorStore } from "@/store/editor-store";
 import { EditorLeftSidebar } from "@/components/editor/EditorLeftSidebar";
@@ -26,6 +27,7 @@ import { useEditorShortcuts } from "@/hooks/use-editor-shortcuts";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { GENERATION_MODES, getModesForPlan } from "@/lib/providers";
+import { ARTBOARD_PRESETS } from "@/lib/artboard-presets";
 import { validateModeAccess, calculateJobCost } from "@/lib/generation-engine";
 import type { GenerationMode } from "@/lib/providers";
 
@@ -44,6 +46,11 @@ export default function SceneBuilder() {
   const [showLeft, setShowLeft] = useState(true);
   const [showRight, setShowRight] = useState(true);
   const [projectName, setProjectName] = useState("");
+  const [addArtboardOpen, setAddArtboardOpen] = useState(false);
+  const [artboardPreset, setArtboardPreset] = useState("ig-post");
+  const [artboardName, setArtboardName] = useState("Artboard 1");
+  const [artboardW, setArtboardW] = useState(1024);
+  const [artboardH, setArtboardH] = useState(1024);
 
   useEditorShortcuts();
 
@@ -55,8 +62,11 @@ export default function SceneBuilder() {
     loadProjectScene, loadVersionsFromDB, setCurrentProjectId,
   } = useSceneStore();
 
-  const { canvasZoom, undoStack, redoStack, undo, redo, snapEnabled, showGrid, toggleSnap, toggleGrid, zoomIn, zoomOut, resetView } = useEditorStore();
-  const { canGenerate, consumeCredits, plan, dailyUsesRemaining, creditBalance, workspaceId } = usePlan();
+  const {
+    canvasZoom, undoStack, redoStack, undo, redo, snapEnabled, showGrid,
+    toggleSnap, toggleGrid, zoomIn, zoomOut, resetView, activeTool, setActiveTool, spaceHeld,
+  } = useEditorStore();
+  const { canGenerate, consumeCredits, plan, workspaceId } = usePlan();
   const { activeWorkspace, userRole } = useWorkspace();
   const isViewerOnly = activeWorkspace?.type === "team" && userRole === "viewer";
   const availableModes = getModesForPlan(plan);
@@ -94,11 +104,49 @@ export default function SceneBuilder() {
     }
   };
 
+  const handleAddArtboard = useCallback(() => {
+    setAddArtboardOpen(true);
+  }, []);
+
+  const createArtboard = async () => {
+    if (!projectId) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data, error } = await supabase.from("artboards").insert({
+      project_id: projectId,
+      user_id: user.id,
+      name: artboardName,
+      width: artboardW,
+      height: artboardH,
+      preset_size: artboardPreset,
+      background_color: "#ffffff",
+      scene_json: { ...currentScene, objects: [] } as any,
+    }).select().single();
+
+    if (error) { toast.error(error.message); return; }
+    toast.success(`Artboard "${artboardName}" created`);
+    setAddArtboardOpen(false);
+
+    // Update canvas dimensions to new artboard
+    setArtboardW(data.width);
+    setArtboardH(data.height);
+  };
+
+  const handlePresetChange = (presetId: string) => {
+    setArtboardPreset(presetId);
+    const preset = ARTBOARD_PRESETS.find(p => p.id === presetId);
+    if (preset && presetId !== "custom") {
+      setArtboardW(preset.width);
+      setArtboardH(preset.height);
+      setArtboardName(preset.name);
+    }
+  };
+
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
       {/* ─── Top Command Bar ───────────────────────────────────── */}
       <header className="h-11 border-b bg-card/90 backdrop-blur-sm flex items-center px-2 gap-1.5 shrink-0 z-50">
-        {/* Left: Nav */}
         <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => navigate("/dashboard")}>
           <ArrowLeft className="h-3.5 w-3.5" />
         </Button>
@@ -138,6 +186,34 @@ export default function SceneBuilder() {
         {/* Right: Tools */}
         <TooltipProvider delayDuration={300}>
           <div className="hidden md:flex items-center gap-0.5">
+            {/* Tool mode */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={activeTool === "select" && !spaceHeld ? "secondary" : "ghost"}
+                  size="icon" className="h-7 w-7"
+                  onClick={() => setActiveTool("select")}
+                >
+                  <MousePointer className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent className="text-[10px]">Select (V)</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={activeTool === "hand" || spaceHeld ? "secondary" : "ghost"}
+                  size="icon" className="h-7 w-7"
+                  onClick={() => setActiveTool(activeTool === "hand" ? "select" : "hand")}
+                >
+                  <Hand className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent className="text-[10px]">Hand tool (Space)</TooltipContent>
+            </Tooltip>
+
+            <Separator orientation="vertical" className="h-4 mx-0.5" />
+
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={undo} disabled={undoStack.length === 0}>
@@ -212,15 +288,15 @@ export default function SceneBuilder() {
         {/* Left Sidebar */}
         {showLeft && (
           <aside className="w-56 border-r bg-card/50 overflow-y-auto shrink-0 hidden md:block">
-            <EditorLeftSidebar />
+            <EditorLeftSidebar onAddArtboard={handleAddArtboard} />
           </aside>
         )}
 
         {/* Center: Canvas + Bottom Bar */}
         <main className="flex-1 flex flex-col overflow-hidden">
           <WorkspaceCanvas
-            artboardWidth={1024}
-            artboardHeight={1024}
+            artboardWidth={artboardW}
+            artboardHeight={artboardH}
             artboardBg="#ffffff"
             generatedImageUrl={generatedImageUrl}
           />
@@ -233,7 +309,7 @@ export default function SceneBuilder() {
               </Button>
 
               <Select value={generationMode} onValueChange={(v) => setGenerationMode(v as GenerationMode)}>
-                <SelectTrigger className="h-7 w-[120px] text-[10px]">
+                <SelectTrigger className="h-7 w-[130px] text-[10px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -288,6 +364,45 @@ export default function SceneBuilder() {
           </aside>
         )}
       </div>
+
+      {/* Add Artboard Dialog */}
+      <Dialog open={addArtboardOpen} onOpenChange={setAddArtboardOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-display">New Artboard</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-2">
+            <div>
+              <label className="text-xs text-muted-foreground">Name</label>
+              <Input value={artboardName} onChange={(e) => setArtboardName(e.target.value)} className="h-8 text-xs mt-0.5" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Preset</label>
+              <Select value={artboardPreset} onValueChange={handlePresetChange}>
+                <SelectTrigger className="h-8 text-xs mt-0.5"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ARTBOARD_PRESETS.map(p => (
+                    <SelectItem key={p.id} value={p.id}>{p.name} ({p.width}×{p.height})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs text-muted-foreground">Width</label>
+                <Input type="number" value={artboardW} onChange={(e) => setArtboardW(Number(e.target.value))} className="h-8 text-xs mt-0.5" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Height</label>
+                <Input type="number" value={artboardH} onChange={(e) => setArtboardH(Number(e.target.value))} className="h-8 text-xs mt-0.5" />
+              </div>
+            </div>
+            <Button className="w-full gradient-primary text-primary-foreground text-xs" onClick={createArtboard}>
+              <Plus className="h-3.5 w-3.5 mr-1" /> Create Artboard
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
