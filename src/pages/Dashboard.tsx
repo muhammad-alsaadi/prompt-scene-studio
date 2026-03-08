@@ -51,6 +51,11 @@ export default function Dashboard() {
 
   const createProject = async () => {
     if (!newName.trim() || !user) return;
+    // Enforce project limit for free plan
+    if (features.maxProjects > 0 && projects.length >= features.maxProjects) {
+      toast.error(`You've reached the ${features.maxProjects} project limit on your plan`);
+      return;
+    }
     const { data, error } = await supabase
       .from("projects")
       .insert({ name: newName, description: newDesc, user_id: user.id })
