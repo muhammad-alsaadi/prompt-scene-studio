@@ -385,8 +385,8 @@ function BrandKitSection() {
 
 // ─── Main Left Sidebar ───────────────────────────────────────────
 
-export function EditorLeftSidebar({ onAddArtboard }: { onAddArtboard?: () => void }) {
-  const { currentScene } = useSceneStore();
+export function EditorLeftSidebar({ onAddArtboard, projectId }: { onAddArtboard?: () => void; projectId?: string | null }) {
+  const { currentScene, generationMode } = useSceneStore();
   const { features } = usePlan();
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [layersOpen, setLayersOpen] = useState(true);
@@ -396,7 +396,7 @@ export function EditorLeftSidebar({ onAddArtboard }: { onAddArtboard?: () => voi
   return (
     <div className="flex flex-col h-full">
       {/* Artboard */}
-      <ArtboardSection onAddArtboard={onAddArtboard || (() => toast.info("Multi-artboard coming soon"))} />
+      <ArtboardSection onAddArtboard={onAddArtboard || (() => toast.info("Multi-artboard coming soon"))} projectId={projectId} />
 
       {/* Provider & Model */}
       <ProviderSection />
