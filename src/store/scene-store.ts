@@ -49,6 +49,7 @@ interface SceneStore {
   toggleObjectVisibility: (id: string) => void;
   toggleObjectLock: (id: string) => void;
   reorderObject: (id: string, direction: "up" | "down") => void;
+  moveObjectToIndex: (fromIndex: number, toIndex: number) => void;
   selectObject: (id: string | null) => void;
   rebuildPrompt: () => void;
   generateImage: (plan: PlanId, workspaceId?: string) => void;
