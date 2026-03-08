@@ -420,7 +420,7 @@ function BrandKitSection() {
 // ─── Main Left Sidebar ───────────────────────────────────────────
 
 export function EditorLeftSidebar({ onAddArtboard, projectId }: { onAddArtboard?: () => void; projectId?: string | null }) {
-  const { currentScene, generationMode } = useSceneStore();
+  const { currentScene, generationMode, moveObjectToIndex } = useSceneStore();
   const { features } = usePlan();
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [layersOpen, setLayersOpen] = useState(true);
