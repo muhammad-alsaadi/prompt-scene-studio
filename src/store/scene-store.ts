@@ -29,6 +29,12 @@ interface SceneStore {
   selectedResolution: "720p" | "1080p" | "2k" | "4k";
   lastJobId: string | null;
   lastCostUnits: number;
+  lastLayerOutputs: any[] | null;
+  lastGenerationMetadata: Record<string, unknown> | null;
+
+  // Context for generation
+  activeBrandKit: { id?: string; colors?: string[]; fonts?: string[]; style_notes?: string; logo_url?: string } | null;
+  uploadedAssetRefs: Array<{ assetId: string; url: string; role: string }>;
 
   setOriginalPrompt: (prompt: string) => void;
   analyzePrompt: () => void;
