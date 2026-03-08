@@ -36,57 +36,25 @@ export function usePlan() {
   const loadPlanState = async () => {
     if (!user) return;
     try {
-      // First check profile for personal_workspace_id
+      // Check active workspace from localStorage first
+      const savedWs = localStorage.getItem("ps_active_workspace");
+
+      // Load from profile
       const { data: profile } = await supabase
         .from("profiles")
         .select("personal_workspace_id")
         .eq("user_id", user.id)
         .maybeSingle();
 
-      let workspaceId = profile?.personal_workspace_id;
+      let workspaceId = savedWs || profile?.personal_workspace_id;
 
-      // If no personal workspace linked, find or create one
-      if (!workspaceId) {
-        const { data: workspace } = await supabase
-          .from("workspaces")
-          .select("id, plan, credit_balance, daily_credits_used, daily_credits_reset_at, type")
-          .eq("owner_id", user.id)
-          .eq("type", "personal")
-          .limit(1)
-          .maybeSingle();
-
-        if (workspace) {
-          workspaceId = workspace.id;
-          // Link to profile
-          await supabase.from("profiles").update({ personal_workspace_id: workspace.id }).eq("user_id", user.id);
-        } else {
-          // Create personal workspace for existing user
-          const { data: newWs } = await supabase
-            .from("workspaces")
-            .insert({ name: "My Workspace", owner_id: user.id, type: "personal", plan: "free" })
-            .select("id")
-            .single();
-
-          if (newWs) {
-            workspaceId = newWs.id;
-            // Link and create subscription
-            await supabase.from("profiles").update({ personal_workspace_id: newWs.id }).eq("user_id", user.id);
-            await supabase.from("subscription_state").insert({
-              workspace_id: newWs.id,
-              current_plan: "free",
-              status: "active",
-            });
-          }
-        }
-      }
-
-      // Now load workspace data
+      // Validate workspace access
       if (workspaceId) {
         const { data: ws } = await supabase
           .from("workspaces")
           .select("id, plan, credit_balance, daily_credits_used, daily_credits_reset_at, type")
           .eq("id", workspaceId)
-          .single();
+          .maybeSingle();
 
         if (ws) {
           const plan = (ws.plan || "free") as PlanId;
@@ -96,7 +64,6 @@ export function usePlan() {
           const now = new Date();
           const isNewDay = now.toDateString() !== resetAt.toDateString();
 
-          // Auto-reset daily uses if new day
           if (plan === "free" && isNewDay) {
             await supabase.from("workspaces").update({
               daily_credits_used: 0,
@@ -111,6 +78,34 @@ export function usePlan() {
             loading: false,
             workspaceId: ws.id,
             workspaceType: (ws.type as "personal" | "team") || "personal",
+          });
+          return;
+        }
+      }
+
+      // Fallback: find personal workspace
+      if (!workspaceId) {
+        const { data: workspace } = await supabase
+          .from("workspaces")
+          .select("id, plan, credit_balance, daily_credits_used, daily_credits_reset_at, type")
+          .eq("owner_id", user.id)
+          .eq("type", "personal")
+          .limit(1)
+          .maybeSingle();
+
+        if (workspace) {
+          workspaceId = workspace.id;
+          const plan = (workspace.plan || "free") as PlanId;
+          const features = PLANS[plan]?.features;
+          const dailyLimit = features?.dailyFreeUses ?? 3;
+
+          setState({
+            plan,
+            creditBalance: workspace.credit_balance || 0,
+            dailyUsesRemaining: dailyLimit,
+            loading: false,
+            workspaceId: workspace.id,
+            workspaceType: "personal",
           });
           return;
         }
@@ -151,7 +146,6 @@ export function usePlan() {
     if (!user || !state.workspaceId) return false;
 
     if (state.plan === "free") {
-      // Track daily usage
       const newUsed = PLANS.free.features.dailyFreeUses - state.dailyUsesRemaining + 1;
       await supabase.from("workspaces").update({
         daily_credits_used: newUsed,
@@ -176,7 +170,6 @@ export function usePlan() {
       credit_balance: newBalance,
     }).eq("id", state.workspaceId);
 
-    // Insert usage event
     const { data: usageEvent } = await supabase.from("usage_events").insert({
       user_id: user.id,
       workspace_id: state.workspaceId,
@@ -185,7 +178,6 @@ export function usePlan() {
       metadata: { description },
     }).select("id").single();
 
-    // Insert ledger entry
     await supabase.from("credit_ledger").insert({
       user_id: user.id,
       workspace_id: state.workspaceId,

@@ -57,6 +57,8 @@ export default function SceneBuilder() {
 
   const { canvasZoom, undoStack, redoStack, undo, redo, snapEnabled, showGrid, toggleSnap, toggleGrid, zoomIn, zoomOut, resetView } = useEditorStore();
   const { canGenerate, consumeCredits, plan, dailyUsesRemaining, creditBalance, workspaceId } = usePlan();
+  const { activeWorkspace, userRole } = useWorkspace();
+  const isViewerOnly = activeWorkspace?.type === "team" && userRole === "viewer";
   const availableModes = getModesForPlan(plan);
 
   useEffect(() => {
