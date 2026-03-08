@@ -49,6 +49,8 @@ export default function Dashboard() {
     if (data) setProjects(data as ProjectRow[]);
   };
 
+  const { features, workspaceId } = usePlan();
+
   const createProject = async () => {
     if (!newName.trim() || !user) return;
     // Enforce project limit for free plan
@@ -58,7 +60,7 @@ export default function Dashboard() {
     }
     const { data, error } = await supabase
       .from("projects")
-      .insert({ name: newName, description: newDesc, user_id: user.id })
+      .insert({ name: newName, description: newDesc, user_id: user.id, workspace_id: workspaceId })
       .select()
       .single();
     if (error) {
