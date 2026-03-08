@@ -337,6 +337,113 @@ export type Database = {
           },
         ]
       }
+      generation_jobs: {
+        Row: {
+          artboard_id: string | null
+          brand_kit_id: string | null
+          completed_at: string | null
+          cost_units: number | null
+          created_at: string
+          error_message: string | null
+          generation_mode: string
+          id: string
+          input_prompt: string | null
+          layer_outputs: Json | null
+          layered_generation: boolean | null
+          metadata: Json | null
+          model: string
+          output_urls: Json | null
+          plan: string
+          project_id: string | null
+          provider: string
+          started_at: string | null
+          status: string
+          structured_scene_json: Json | null
+          uploaded_assets_used: Json | null
+          user_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          artboard_id?: string | null
+          brand_kit_id?: string | null
+          completed_at?: string | null
+          cost_units?: number | null
+          created_at?: string
+          error_message?: string | null
+          generation_mode?: string
+          id?: string
+          input_prompt?: string | null
+          layer_outputs?: Json | null
+          layered_generation?: boolean | null
+          metadata?: Json | null
+          model?: string
+          output_urls?: Json | null
+          plan?: string
+          project_id?: string | null
+          provider?: string
+          started_at?: string | null
+          status?: string
+          structured_scene_json?: Json | null
+          uploaded_assets_used?: Json | null
+          user_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          artboard_id?: string | null
+          brand_kit_id?: string | null
+          completed_at?: string | null
+          cost_units?: number | null
+          created_at?: string
+          error_message?: string | null
+          generation_mode?: string
+          id?: string
+          input_prompt?: string | null
+          layer_outputs?: Json | null
+          layered_generation?: boolean | null
+          metadata?: Json | null
+          model?: string
+          output_urls?: Json | null
+          plan?: string
+          project_id?: string | null
+          provider?: string
+          started_at?: string | null
+          status?: string
+          structured_scene_json?: Json | null
+          uploaded_assets_used?: Json | null
+          user_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "generation_jobs_artboard_id_fkey"
+            columns: ["artboard_id"]
+            isOneToOne: false
+            referencedRelation: "artboards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "generation_jobs_brand_kit_id_fkey"
+            columns: ["brand_kit_id"]
+            isOneToOne: false
+            referencedRelation: "brand_kits"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "generation_jobs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "generation_jobs_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -418,6 +525,50 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "projects_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      provider_keys: {
+        Row: {
+          created_at: string
+          encrypted_key: string
+          id: string
+          is_active: boolean | null
+          last_validated_at: string | null
+          provider: string
+          updated_at: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          encrypted_key: string
+          id?: string
+          is_active?: boolean | null
+          last_validated_at?: string | null
+          provider: string
+          updated_at?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          encrypted_key?: string
+          id?: string
+          is_active?: boolean | null
+          last_validated_at?: string | null
+          provider?: string
+          updated_at?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_keys_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
