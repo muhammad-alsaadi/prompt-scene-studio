@@ -183,8 +183,41 @@ function AddObjectMenu({ onClose }: { onClose: () => void }) {
 
 // ─── Artboard Section ─────────────────────────────────────────────
 
-function ArtboardSection({ onAddArtboard }: { onAddArtboard: () => void }) {
+interface ArtboardItem {
+  id: string;
+  name: string;
+  width: number;
+  height: number;
+  preset_size: string | null;
+}
+
+function ArtboardSection({ onAddArtboard, projectId }: { onAddArtboard: () => void; projectId?: string | null }) {
   const [open, setOpen] = useState(true);
+  const [artboards, setArtboards] = useState<ArtboardItem[]>([]);
+  const { activeArtboardId, setActiveArtboard } = useEditorStore();
+
+  useEffect(() => {
+    if (!projectId) return;
+    const fetchArtboards = async () => {
+      const { data } = await supabase
+        .from("artboards")
+        .select("id, name, width, height, preset_size")
+        .eq("project_id", projectId)
+        .order("sort_order", { ascending: true });
+      if (data) setArtboards(data);
+    };
+    fetchArtboards();
+
+    // Listen for new artboards via channel
+    const channel = supabase
+      .channel(`artboards-${projectId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "artboards", filter: `project_id=eq.${projectId}` }, () => {
+        fetchArtboards();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [projectId]);
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -192,15 +225,32 @@ function ArtboardSection({ onAddArtboard }: { onAddArtboard: () => void }) {
         <CollapsibleTrigger className="flex items-center gap-1 text-[10px] font-display font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors">
           {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
           <Monitor className="h-3 w-3" />
-          Artboard
+          Artboards
+          <span className="text-[9px] font-normal ml-1 tabular-nums">({artboards.length})</span>
         </CollapsibleTrigger>
         <Button size="sm" variant="ghost" className="h-5 w-5 p-0" onClick={onAddArtboard}>
           <Plus className="h-3 w-3" />
         </Button>
       </div>
       <CollapsibleContent>
-        <div className="px-3 py-2 border-b text-[10px] text-muted-foreground">
-          <p>Current artboard is active. Use + to add more artboards.</p>
+        <div className="px-1.5 py-1 border-b space-y-0.5">
+          {artboards.length === 0 ? (
+            <p className="text-[10px] text-muted-foreground text-center py-3">No artboards yet. Click + to create one.</p>
+          ) : (
+            artboards.map((ab) => (
+              <button
+                key={ab.id}
+                className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-[10px] transition-colors ${
+                  activeArtboardId === ab.id ? "bg-primary/10 text-primary ring-1 ring-primary/20" : "hover:bg-secondary/60"
+                }`}
+                onClick={() => setActiveArtboard(ab.id)}
+              >
+                <Monitor className="h-3 w-3 shrink-0 text-muted-foreground" />
+                <span className="flex-1 truncate font-medium text-left">{ab.name}</span>
+                <span className="text-[9px] text-muted-foreground tabular-nums">{ab.width}×{ab.height}</span>
+              </button>
+            ))
+          )}
         </div>
       </CollapsibleContent>
     </Collapsible>
