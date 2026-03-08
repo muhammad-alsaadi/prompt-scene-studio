@@ -87,6 +87,10 @@ export const useSceneStore = create<SceneStore>((set, get) => ({
   selectedResolution: "1080p",
   lastJobId: null,
   lastCostUnits: 0,
+  lastLayerOutputs: null,
+  lastGenerationMetadata: null,
+  activeBrandKit: null,
+  uploadedAssetRefs: [],
 
   setOriginalPrompt: (prompt) => set({ originalPrompt: prompt, isDirty: true }),
   setGenerationMode: (mode) => set({ generationMode: mode }),
