@@ -160,3 +160,16 @@
     background-size: 24px 24px;
   }
 }
+
+/* Custom cursor for canvas — small crosshair */
+.canvas-cursor {
+  cursor: default;
+}
+
+:root .canvas-cursor {
+  --cursor-color: 0 0% 10%;
+}
+
+.dark .canvas-cursor {
+  --cursor-color: 0 0% 90%;
+}
