@@ -288,7 +288,7 @@ export default function SceneBuilder() {
         {/* Left Sidebar */}
         {showLeft && (
           <aside className="w-56 border-r bg-card/50 overflow-y-auto shrink-0 hidden md:block">
-            <EditorLeftSidebar onAddArtboard={handleAddArtboard} />
+            <EditorLeftSidebar onAddArtboard={handleAddArtboard} projectId={projectId} />
           </aside>
         )}
 
