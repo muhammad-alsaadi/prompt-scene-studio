@@ -13,11 +13,16 @@ import {
   FileJson,
   FileText,
   Info,
+  Layers,
+  Layout,
+  Zap,
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useSceneStore } from "@/store/scene-store";
 import { SceneEditorPanel } from "@/components/scene/SceneEditorPanel";
 import { ObjectsPanel } from "@/components/scene/ObjectsPanel";
@@ -26,6 +31,9 @@ import { PlanUsageBadge } from "@/components/PlanUsageBadge";
 import { usePlan } from "@/hooks/use-plan";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { GENERATION_MODES, getModesForPlan, getProvidersForPlan } from "@/lib/providers";
+import { validateModeAccess, calculateJobCost } from "@/lib/generation-engine";
+import type { GenerationMode } from "@/lib/providers";
 
 type RightPanel = "inspector" | "history";
 
@@ -61,7 +69,6 @@ export default function SceneBuilder() {
     loadProjectScene(projectId);
     loadVersionsFromDB(projectId);
 
-    // Load project name
     supabase.from("projects").select("name").eq("id", projectId).single().then(({ data }) => {
       if (data) setProjectName(data.name);
       else navigate("/dashboard");
@@ -110,6 +117,7 @@ export default function SceneBuilder() {
         </div>
 
         <div className="hidden md:flex items-center gap-0.5">
+          <PlanUsageBadge />
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowLeft(!showLeft)}>
             <PanelLeftClose className="h-3.5 w-3.5" />
           </Button>
@@ -224,7 +232,7 @@ export default function SceneBuilder() {
 }
 
 function PreviewArea() {
-  const { isGenerating, generatedImageUrl, generatedPrompt, currentScene, previewTab } = useSceneStore();
+  const { isGenerating, generatedImageUrl, generatedPrompt, currentScene, previewTab, lastCostUnits, generationMode, selectedProvider, selectedModel } = useSceneStore();
 
   return (
     <div className="flex-1 flex items-center justify-center p-6 overflow-auto scene-grid">
@@ -267,7 +275,9 @@ function PreviewArea() {
                 <div><span className="text-muted-foreground">Style:</span> {currentScene.style.visual_style}</div>
                 <div><span className="text-muted-foreground">Objects:</span> {currentScene.objects.length}</div>
                 <div><span className="text-muted-foreground">Quality:</span> {currentScene.style.quality}</div>
-                <div><span className="text-muted-foreground">Location:</span> {currentScene.environment.location || "—"}</div>
+                <div><span className="text-muted-foreground">Mode:</span> {generationMode}</div>
+                <div><span className="text-muted-foreground">Provider:</span> {selectedProvider}/{selectedModel}</div>
+                <div><span className="text-muted-foreground">Last Cost:</span> {lastCostUnits} units</div>
                 <div><span className="text-muted-foreground">Camera:</span> {currentScene.camera.shot_type} / {currentScene.camera.lens}</div>
               </div>
             </div>
@@ -292,39 +302,106 @@ function EmptyPreview() {
   );
 }
 
+const MODE_ICONS: Record<GenerationMode, typeof ImageIcon> = {
+  scene: ImageIcon,
+  ad_composition: Layout,
+  advanced_layered: Layers,
+};
+
 function BottomBar() {
-  const { isGenerating, generatedPrompt, generateImage, saveVersion, isDirty } = useSceneStore();
-  const { canGenerate, consumeCredits, plan, dailyUsesRemaining, creditBalance } = usePlan();
+  const { isGenerating, generatedPrompt, saveVersion, isDirty, generationMode, setGenerationMode, selectedProvider, setSelectedProvider, selectedModel, setSelectedModel, selectedResolution, setSelectedResolution, generateImage, lastCostUnits } = useSceneStore();
+  const { canGenerate, consumeCredits, plan, dailyUsesRemaining, creditBalance, workspaceId } = usePlan();
+
+  const availableModes = getModesForPlan(plan);
+  const availableProviders = getProvidersForPlan(plan);
 
   const handleGenerate = async () => {
     if (!canGenerate()) {
       toast.error(plan === "free" ? "No free uses remaining today" : "Insufficient credits");
       return;
     }
-    generateImage();
-    // Consume credits after triggering (the store handles the actual generation)
-    const cost = plan === "free" ? 0 : 100; // base scene mode cost
-    if (cost > 0) {
-      await consumeCredits(cost, "Scene generation");
-    } else {
-      // Free plan: just track daily usage
+
+    // Validate mode access
+    const access = validateModeAccess(plan, generationMode);
+    if (!access.allowed) {
+      toast.error(access.reason || "Mode not available on your plan");
+      return;
+    }
+
+    // Calculate estimated cost
+    const estimatedCost = calculateJobCost({
+      mode: generationMode,
+      provider: selectedProvider,
+      model: selectedModel,
+      resolution: selectedResolution,
+      plan,
+      layeredGeneration: generationMode === "advanced_layered",
+    });
+
+    generateImage(plan, workspaceId || undefined);
+
+    // Consume credits
+    if (plan === "free") {
       await consumeCredits(0, "Free daily generation");
+    } else {
+      await consumeCredits(estimatedCost, `${generationMode} generation (${selectedProvider}/${selectedModel})`);
     }
   };
 
   return (
-    <div className="px-4 py-2.5 border-t bg-card flex items-center justify-between">
-      <Button
-        variant="outline"
-        size="sm"
-        className="h-7 text-xs"
-        onClick={() => saveVersion()}
-        disabled={!isDirty}
-      >
-        <Save className="h-3 w-3 mr-1" /> Save
-      </Button>
+    <div className="px-4 py-2.5 border-t bg-card flex items-center justify-between gap-2">
       <div className="flex items-center gap-2">
-        <span className="text-[10px] text-muted-foreground">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 text-xs"
+          onClick={() => saveVersion()}
+          disabled={!isDirty}
+        >
+          <Save className="h-3 w-3 mr-1" /> Save
+        </Button>
+
+        {/* Mode Selector */}
+        <TooltipProvider>
+          <Select value={generationMode} onValueChange={(v) => setGenerationMode(v as GenerationMode)}>
+            <SelectTrigger className="h-7 w-[130px] text-[11px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {GENERATION_MODES.map((mode) => {
+                const available = availableModes.some(m => m.id === mode.id);
+                const Icon = MODE_ICONS[mode.id];
+                return (
+                  <SelectItem key={mode.id} value={mode.id} disabled={!available}>
+                    <span className="flex items-center gap-1.5">
+                      <Icon className="h-3 w-3" />
+                      {mode.name}
+                      {!available && <span className="text-[9px] text-muted-foreground ml-1">Upgrade</span>}
+                    </span>
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        </TooltipProvider>
+
+        {/* Resolution Selector */}
+        <Select value={selectedResolution} onValueChange={(v) => setSelectedResolution(v as any)}>
+          <SelectTrigger className="h-7 w-[80px] text-[11px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="720p">720p</SelectItem>
+            <SelectItem value="1080p">1080p</SelectItem>
+            <SelectItem value="2k" disabled={!["pro", "ultra", "team"].includes(plan)}>2K</SelectItem>
+            <SelectItem value="4k" disabled={!["ultra", "team"].includes(plan)}>4K</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+          <Zap className="h-2.5 w-2.5" />
           {plan === "free" ? `${dailyUsesRemaining} uses left` : `${creditBalance.toLocaleString()} credits`}
         </span>
         <Button
