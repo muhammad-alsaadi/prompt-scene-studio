@@ -6,11 +6,38 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Provider routing map
+const PROVIDER_MODELS: Record<string, { gateway: string; model: string }> = {
+  "gemini-flash-image": {
+    gateway: "https://ai.gateway.lovable.dev/v1/chat/completions",
+    model: "google/gemini-2.5-flash-image",
+  },
+  "gemini-pro-image": {
+    gateway: "https://ai.gateway.lovable.dev/v1/chat/completions",
+    model: "google/gemini-3-pro-image-preview",
+  },
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { prompt } = await req.json();
+    const body = await req.json();
+    const {
+      prompt,
+      mode = "scene",
+      provider = "lovable-ai",
+      model = "gemini-flash-image",
+      resolution = "1080p",
+      scene_json,
+      uploaded_assets,
+      brand_kit_id,
+      layered = false,
+      workspace_id,
+      project_id,
+      artboard_id,
+    } = body;
+
     if (!prompt || typeof prompt !== "string") {
       return new Response(JSON.stringify({ error: "Prompt is required" }), {
         status: 400,
@@ -21,17 +48,27 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    // Generate image using Nano banana (gemini-2.5-flash-image)
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    // Enhance prompt based on mode
+    let enhancedPrompt = prompt;
+    if (mode === "ad_composition") {
+      enhancedPrompt = `Professional advertising composition. ${prompt}. Clean, commercial quality, marketing-ready output.`;
+    } else if (mode === "advanced_layered") {
+      enhancedPrompt = `Generate as isolated visual elements. ${prompt}. Each major element should be clearly defined.`;
+    }
+
+    // Resolve provider/model route
+    const route = PROVIDER_MODELS[model] || PROVIDER_MODELS["gemini-flash-image"];
+
+    const response = await fetch(route.gateway, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash-image",
+        model: route.model,
         messages: [
-          { role: "user", content: `Generate this image: ${prompt}` },
+          { role: "user", content: `Generate this image: ${enhancedPrompt}` },
         ],
         modalities: ["image", "text"],
       }),
@@ -62,12 +99,12 @@ serve(async (req) => {
       throw new Error("No image generated");
     }
 
-    // Upload to Supabase Storage
+    // Upload to Storage
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Extract auth user from request
+    // Extract user
     const authHeader = req.headers.get("authorization");
     let userId = "anonymous";
     if (authHeader) {
@@ -78,28 +115,51 @@ serve(async (req) => {
       if (user) userId = user.id;
     }
 
-    // Decode base64 and upload
+    // Decode and upload
     const base64Data = imageData.replace(/^data:image\/\w+;base64,/, "");
     const binaryData = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
-    const fileName = `${userId}/${Date.now()}.png`;
+    const fileName = `${userId}/${Date.now()}-${mode}.png`;
 
     const { error: uploadError } = await supabaseAdmin.storage
       .from("generated-images")
       .upload(fileName, binaryData, { contentType: "image/png" });
 
-    if (uploadError) {
+    let imageUrl = imageData; // fallback to base64
+    if (!uploadError) {
+      const { data: publicUrl } = supabaseAdmin.storage
+        .from("generated-images")
+        .getPublicUrl(fileName);
+      imageUrl = publicUrl.publicUrl;
+    } else {
       console.error("Upload error:", uploadError);
-      // Return base64 as fallback
-      return new Response(JSON.stringify({ image_url: imageData }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
     }
 
-    const { data: publicUrl } = supabaseAdmin.storage
-      .from("generated-images")
-      .getPublicUrl(fileName);
+    // Calculate cost units based on mode/model/resolution
+    const baseCosts: Record<string, number> = {
+      scene: 100,
+      ad_composition: 200,
+      advanced_layered: 300,
+    };
+    const resMult: Record<string, number> = {
+      "720p": 1,
+      "1080p": 1.5,
+      "2k": 2.5,
+      "4k": 4,
+    };
+    const costUnits = Math.round((baseCosts[mode] || 100) * (resMult[resolution] || 1));
 
-    return new Response(JSON.stringify({ image_url: publicUrl.publicUrl }), {
+    return new Response(JSON.stringify({
+      image_url: imageUrl,
+      cost_units: costUnits,
+      provider,
+      model,
+      mode,
+      metadata: {
+        resolution,
+        layered,
+        scene_title: scene_json?.scene_title,
+      },
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
