@@ -413,6 +413,7 @@ export function EditorRightInspector() {
       ) : (
         <>
           <TransformInspector obj={selectedObj} />
+          <LayerCompositing obj={selectedObj} />
           <AppearanceInspector obj={selectedObj} />
           {selectedObj.objectType === "text" && <TextInspector obj={selectedObj} />}
           <CreativeInspector obj={selectedObj} />
