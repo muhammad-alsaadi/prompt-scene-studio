@@ -21,6 +21,7 @@ import { TeamSettingsPanel } from "@/components/workspace/TeamSettingsPanel";
 import { TeamActivityPanel } from "@/components/workspace/TeamActivityPanel";
 import { SharedAssetsPanel } from "@/components/workspace/SharedAssetsPanel";
 import { SharedBrandKitsPanel } from "@/components/workspace/SharedBrandKitsPanel";
+import { BrandKitManager } from "@/components/settings/BrandKitManager";
 import { SettingsProfileSection } from "@/components/settings/SettingsProfileSection";
 import { SettingsPlanSection } from "@/components/settings/SettingsPlanSection";
 import { SettingsAppearanceSection } from "@/components/settings/SettingsAppearanceSection";
