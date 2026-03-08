@@ -297,6 +297,23 @@ function EmptyPreview() {
 
 function BottomBar() {
   const { isGenerating, generatedPrompt, generateImage, saveVersion, isDirty } = useSceneStore();
+  const { canGenerate, consumeCredits, plan, dailyUsesRemaining, creditBalance } = usePlan();
+
+  const handleGenerate = async () => {
+    if (!canGenerate()) {
+      toast.error(plan === "free" ? "No free uses remaining today" : "Insufficient credits");
+      return;
+    }
+    generateImage();
+    // Consume credits after triggering (the store handles the actual generation)
+    const cost = plan === "free" ? 0 : 100; // base scene mode cost
+    if (cost > 0) {
+      await consumeCredits(cost, "Scene generation");
+    } else {
+      // Free plan: just track daily usage
+      await consumeCredits(0, "Free daily generation");
+    }
+  };
 
   return (
     <div className="px-4 py-2.5 border-t bg-card flex items-center justify-between">
@@ -309,15 +326,20 @@ function BottomBar() {
       >
         <Save className="h-3 w-3 mr-1" /> Save
       </Button>
-      <Button
-        className="gradient-primary text-primary-foreground h-8 text-xs rounded-lg"
-        onClick={() => generateImage()}
-        disabled={isGenerating || !generatedPrompt}
-        size="sm"
-      >
-        {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Send className="h-3.5 w-3.5 mr-1" />}
-        Generate
-      </Button>
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] text-muted-foreground">
+          {plan === "free" ? `${dailyUsesRemaining} uses left` : `${creditBalance.toLocaleString()} credits`}
+        </span>
+        <Button
+          className="gradient-primary text-primary-foreground h-8 text-xs rounded-lg"
+          onClick={handleGenerate}
+          disabled={isGenerating || !generatedPrompt || !canGenerate()}
+          size="sm"
+        >
+          {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Send className="h-3.5 w-3.5 mr-1" />}
+          Generate
+        </Button>
+      </div>
     </div>
   );
 }
