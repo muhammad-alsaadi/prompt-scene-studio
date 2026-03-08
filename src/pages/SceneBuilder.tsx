@@ -21,6 +21,7 @@ import { WorkspaceCanvas } from "@/components/editor/WorkspaceCanvas";
 import { VersionHistoryPanel } from "@/components/scene/VersionHistoryPanel";
 import { PlanUsageBadge } from "@/components/PlanUsageBadge";
 import { usePlan } from "@/hooks/use-plan";
+import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useEditorShortcuts } from "@/hooks/use-editor-shortcuts";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
