@@ -303,7 +303,7 @@ serve(async (req) => {
         zIndex: 0,
       });
 
-      // Generate element layers
+      // Generate element layers and remove backgrounds
       for (let i = 0; i < importantObjects.length; i++) {
         const obj = importantObjects[i];
         console.log(`[generate-image] Generating element layer ${i + 1}: ${obj.type || obj.name}`);
@@ -313,11 +313,47 @@ serve(async (req) => {
           const elemFileName = `${userId}/${timestamp}-layer_element_${i}.png`;
           const elemUrl = await uploadImage(elemImageData, elemFileName, supabaseAdmin);
 
+          // Remove background to make element transparent
+          let transparentUrl = elemUrl || elemImageData;
+          try {
+            console.log(`[generate-image] Removing background for element ${i}...`);
+            const rbResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${LOVABLE_API_KEY}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                model: "google/gemini-2.5-flash-image",
+                messages: [{
+                  role: "user",
+                  content: [
+                    { type: "text", text: "Remove the background completely. Make the background fully transparent. Keep only the main subject with clean edges. Output as PNG with transparent background." },
+                    { type: "image_url", image_url: { url: elemUrl || elemImageData } },
+                  ],
+                }],
+                modalities: ["image", "text"],
+              }),
+            });
+
+            if (rbResponse.ok) {
+              const rbData = await rbResponse.json();
+              const rbImage = rbData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+              if (rbImage) {
+                const trFileName = `${userId}/${timestamp}-layer_element_${i}_transparent.png`;
+                const trUrl = await uploadImage(rbImage, trFileName, supabaseAdmin);
+                if (trUrl) transparentUrl = trUrl;
+              }
+            }
+          } catch (rbErr) {
+            console.error(`[generate-image] Background removal failed for element ${i}, using original:`, rbErr);
+          }
+
           layerOutputs.push({
             layerId: obj.id || `element_${i}`,
             layerType: "element",
             objectType: obj.type || obj.name,
-            assetUrl: elemUrl || elemImageData,
+            assetUrl: transparentUrl,
             width: obj.width || 256,
             height: obj.height || 256,
             x: obj.x || (200 + i * 150),
@@ -326,7 +362,6 @@ serve(async (req) => {
           });
         } catch (elemErr) {
           console.error(`[generate-image] Failed to generate element layer ${i}:`, elemErr);
-          // Continue with other layers
         }
       }
 
