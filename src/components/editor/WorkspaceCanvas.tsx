@@ -495,13 +495,13 @@ export function WorkspaceCanvas({ artboardWidth = 1024, artboardHeight = 1024, a
         const fileName = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
 
         const { error: uploadError } = await supabase.storage
-          .from("user-assets")
+          .from("generated-images")
           .upload(fileName, file, { contentType: file.type });
 
         if (uploadError) throw uploadError;
 
         const { data: urlData } = supabase.storage
-          .from("user-assets")
+          .from("generated-images")
           .getPublicUrl(fileName);
 
         // Get image dimensions
