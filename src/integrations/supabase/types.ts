@@ -23,6 +23,8 @@ export type Database = {
           id: string
           metadata: Json | null
           project_id: string | null
+          target_id: string | null
+          target_type: string | null
           user_id: string
           workspace_id: string | null
         }
@@ -34,6 +36,8 @@ export type Database = {
           id?: string
           metadata?: Json | null
           project_id?: string | null
+          target_id?: string | null
+          target_type?: string | null
           user_id: string
           workspace_id?: string | null
         }
@@ -45,6 +49,8 @@ export type Database = {
           id?: string
           metadata?: Json | null
           project_id?: string | null
+          target_id?: string | null
+          target_type?: string | null
           user_id?: string
           workspace_id?: string | null
         }
@@ -67,6 +73,7 @@ export type Database = {
       }
       artboards: {
         Row: {
+          archived_at: string | null
           background_color: string | null
           background_type: string | null
           created_at: string
@@ -86,6 +93,7 @@ export type Database = {
           width: number
         }
         Insert: {
+          archived_at?: string | null
           background_color?: string | null
           background_type?: string | null
           created_at?: string
@@ -105,6 +113,7 @@ export type Database = {
           width?: number
         }
         Update: {
+          archived_at?: string | null
           background_color?: string | null
           background_type?: string | null
           created_at?: string
@@ -135,10 +144,12 @@ export type Database = {
       }
       assets: {
         Row: {
+          asset_type: string
           created_at: string
           file_size: number | null
           file_type: string
           file_url: string
+          height: number | null
           id: string
           is_shared: boolean | null
           metadata: Json | null
@@ -147,13 +158,16 @@ export type Database = {
           project_id: string | null
           tags: string[] | null
           user_id: string
+          width: number | null
           workspace_id: string | null
         }
         Insert: {
+          asset_type?: string
           created_at?: string
           file_size?: number | null
           file_type?: string
           file_url: string
+          height?: number | null
           id?: string
           is_shared?: boolean | null
           metadata?: Json | null
@@ -162,13 +176,16 @@ export type Database = {
           project_id?: string | null
           tags?: string[] | null
           user_id: string
+          width?: number | null
           workspace_id?: string | null
         }
         Update: {
+          asset_type?: string
           created_at?: string
           file_size?: number | null
           file_type?: string
           file_url?: string
+          height?: number | null
           id?: string
           is_shared?: boolean | null
           metadata?: Json | null
@@ -177,6 +194,7 @@ export type Database = {
           project_id?: string | null
           tags?: string[] | null
           user_id?: string
+          width?: number | null
           workspace_id?: string | null
         }
         Relationships: [
@@ -203,9 +221,13 @@ export type Database = {
           fonts: Json | null
           id: string
           is_shared: boolean | null
+          logo_asset_id: string | null
           logo_url: string | null
           name: string
+          secondary_colors: Json | null
           style_notes: string | null
+          style_preferences: Json | null
+          typography: Json | null
           updated_at: string
           user_id: string
           workspace_id: string | null
@@ -216,9 +238,13 @@ export type Database = {
           fonts?: Json | null
           id?: string
           is_shared?: boolean | null
+          logo_asset_id?: string | null
           logo_url?: string | null
           name?: string
+          secondary_colors?: Json | null
           style_notes?: string | null
+          style_preferences?: Json | null
+          typography?: Json | null
           updated_at?: string
           user_id: string
           workspace_id?: string | null
@@ -229,14 +255,25 @@ export type Database = {
           fonts?: Json | null
           id?: string
           is_shared?: boolean | null
+          logo_asset_id?: string | null
           logo_url?: string | null
           name?: string
+          secondary_colors?: Json | null
           style_notes?: string | null
+          style_preferences?: Json | null
+          typography?: Json | null
           updated_at?: string
           user_id?: string
           workspace_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "brand_kits_logo_asset_id_fkey"
+            columns: ["logo_asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "brand_kits_workspace_id_fkey"
             columns: ["workspace_id"]
@@ -255,6 +292,7 @@ export type Database = {
           id: string
           metadata: Json | null
           operation: string
+          related_usage_event_id: string | null
           user_id: string
           workspace_id: string | null
         }
@@ -266,6 +304,7 @@ export type Database = {
           id?: string
           metadata?: Json | null
           operation: string
+          related_usage_event_id?: string | null
           user_id: string
           workspace_id?: string | null
         }
@@ -277,10 +316,18 @@ export type Database = {
           id?: string
           metadata?: Json | null
           operation?: string
+          related_usage_event_id?: string | null
           user_id?: string
           workspace_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "credit_ledger_related_usage_event_id_fkey"
+            columns: ["related_usage_event_id"]
+            isOneToOne: false
+            referencedRelation: "usage_events"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "credit_ledger_workspace_id_fkey"
             columns: ["workspace_id"]
@@ -295,7 +342,9 @@ export type Database = {
           avatar_url: string | null
           created_at: string
           display_name: string | null
+          email: string | null
           id: string
+          personal_workspace_id: string | null
           updated_at: string
           user_id: string
         }
@@ -303,7 +352,9 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           display_name?: string | null
+          email?: string | null
           id?: string
+          personal_workspace_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -311,17 +362,29 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           display_name?: string | null
+          email?: string | null
           id?: string
+          personal_workspace_id?: string | null
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_personal_workspace_id_fkey"
+            columns: ["personal_workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       projects: {
         Row: {
+          archived_at: string | null
           created_at: string
           description: string | null
           id: string
+          last_opened_at: string | null
           name: string
           preview_image_url: string | null
           updated_at: string
@@ -329,9 +392,11 @@ export type Database = {
           workspace_id: string | null
         }
         Insert: {
+          archived_at?: string | null
           created_at?: string
           description?: string | null
           id?: string
+          last_opened_at?: string | null
           name: string
           preview_image_url?: string | null
           updated_at?: string
@@ -339,9 +404,11 @@ export type Database = {
           workspace_id?: string | null
         }
         Update: {
+          archived_at?: string | null
           created_at?: string
           description?: string | null
           id?: string
+          last_opened_at?: string | null
           name?: string
           preview_image_url?: string | null
           updated_at?: string
@@ -477,71 +544,173 @@ export type Database = {
           },
         ]
       }
+      subscription_state: {
+        Row: {
+          active_from: string
+          active_until: string | null
+          billing_mode: string | null
+          created_at: string
+          current_plan: string
+          id: string
+          seat_count: number
+          status: string
+          telegram_payment_reference: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          active_from?: string
+          active_until?: string | null
+          billing_mode?: string | null
+          created_at?: string
+          current_plan?: string
+          id?: string
+          seat_count?: number
+          status?: string
+          telegram_payment_reference?: string | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          active_from?: string
+          active_until?: string | null
+          billing_mode?: string | null
+          created_at?: string
+          current_plan?: string
+          id?: string
+          seat_count?: number
+          status?: string
+          telegram_payment_reference?: string | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_state_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       templates: {
         Row: {
           category: string
           created_at: string
+          created_by_user_id: string | null
           description: string | null
           id: string
           is_featured: boolean
+          is_global: boolean
           preview_url: string | null
           scene_json: Json
           sort_order: number
           starter_prompt: string
+          tags: string[] | null
           title: string
         }
         Insert: {
           category?: string
           created_at?: string
+          created_by_user_id?: string | null
           description?: string | null
           id?: string
           is_featured?: boolean
+          is_global?: boolean
           preview_url?: string | null
           scene_json?: Json
           sort_order?: number
           starter_prompt?: string
+          tags?: string[] | null
           title: string
         }
         Update: {
           category?: string
           created_at?: string
+          created_by_user_id?: string | null
           description?: string | null
           id?: string
           is_featured?: boolean
+          is_global?: boolean
           preview_url?: string | null
           scene_json?: Json
           sort_order?: number
           starter_prompt?: string
+          tags?: string[] | null
           title?: string
         }
         Relationships: []
       }
       usage_events: {
         Row: {
+          action_type: string | null
+          artboard_id: string | null
           created_at: string
           credits_used: number
           event_type: string
+          generation_mode: string | null
           id: string
           metadata: Json | null
+          model: string | null
+          project_id: string | null
+          provider: string | null
           user_id: string
+          workspace_id: string | null
         }
         Insert: {
+          action_type?: string | null
+          artboard_id?: string | null
           created_at?: string
           credits_used?: number
           event_type: string
+          generation_mode?: string | null
           id?: string
           metadata?: Json | null
+          model?: string | null
+          project_id?: string | null
+          provider?: string | null
           user_id: string
+          workspace_id?: string | null
         }
         Update: {
+          action_type?: string | null
+          artboard_id?: string | null
           created_at?: string
           credits_used?: number
           event_type?: string
+          generation_mode?: string | null
           id?: string
           metadata?: Json | null
+          model?: string | null
+          project_id?: string | null
+          provider?: string | null
           user_id?: string
+          workspace_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "usage_events_artboard_id_fkey"
+            columns: ["artboard_id"]
+            isOneToOne: false
+            referencedRelation: "artboards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "usage_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "usage_events_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       workspace_members: {
         Row: {
@@ -551,6 +720,8 @@ export type Database = {
           invited_by: string | null
           invited_email: string | null
           role: string
+          status: string
+          updated_at: string
           user_id: string
           workspace_id: string
         }
@@ -561,6 +732,8 @@ export type Database = {
           invited_by?: string | null
           invited_email?: string | null
           role?: string
+          status?: string
+          updated_at?: string
           user_id: string
           workspace_id: string
         }
@@ -571,6 +744,8 @@ export type Database = {
           invited_by?: string | null
           invited_email?: string | null
           role?: string
+          status?: string
+          updated_at?: string
           user_id?: string
           workspace_id?: string
         }
@@ -586,6 +761,7 @@ export type Database = {
       }
       workspaces: {
         Row: {
+          archived_at: string | null
           created_at: string
           credit_balance: number
           daily_credits_reset_at: string | null
@@ -595,9 +771,11 @@ export type Database = {
           owner_id: string
           plan: string
           settings: Json | null
+          type: string
           updated_at: string
         }
         Insert: {
+          archived_at?: string | null
           created_at?: string
           credit_balance?: number
           daily_credits_reset_at?: string | null
@@ -607,9 +785,11 @@ export type Database = {
           owner_id: string
           plan?: string
           settings?: Json | null
+          type?: string
           updated_at?: string
         }
         Update: {
+          archived_at?: string | null
           created_at?: string
           credit_balance?: number
           daily_credits_reset_at?: string | null
@@ -619,6 +799,7 @@ export type Database = {
           owner_id?: string
           plan?: string
           settings?: Json | null
+          type?: string
           updated_at?: string
         }
         Relationships: []
@@ -628,7 +809,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_workspace_role: {
+        Args: { _user_id: string; _workspace_id: string }
+        Returns: string
+      }
+      is_workspace_member: {
+        Args: { _user_id: string; _workspace_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never

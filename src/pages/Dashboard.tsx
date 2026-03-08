@@ -31,7 +31,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { resetScene } = useSceneStore();
   const { user, signOut } = useAuth();
-  const { features } = usePlan();
+  const { features, workspaceId } = usePlan();
   const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
@@ -58,7 +58,7 @@ export default function Dashboard() {
     }
     const { data, error } = await supabase
       .from("projects")
-      .insert({ name: newName, description: newDesc, user_id: user.id })
+      .insert({ name: newName, description: newDesc, user_id: user.id, workspace_id: workspaceId })
       .select()
       .single();
     if (error) {
