@@ -6,16 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useSceneStore } from "@/store/scene-store";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { usePlan } from "@/hooks/use-plan";
 import { PlanUsageBadge } from "@/components/PlanUsageBadge";
+import { WorkspaceSwitcher } from "@/components/workspace/WorkspaceSwitcher";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 
 interface ProjectRow {
@@ -25,6 +23,7 @@ interface ProjectRow {
   preview_image_url: string | null;
   created_at: string;
   updated_at: string;
+  workspace_id: string | null;
 }
 
 export default function Dashboard() {
@@ -32,38 +31,57 @@ export default function Dashboard() {
   const { resetScene } = useSceneStore();
   const { user, signOut } = useAuth();
   const { features, workspaceId } = usePlan();
+  const { activeWorkspaceId, activeWorkspace } = useWorkspace();
   const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
 
   useEffect(() => {
-    if (user) loadProjects();
-  }, [user]);
+    if (user && activeWorkspaceId) loadProjects();
+  }, [user, activeWorkspaceId]);
 
   const loadProjects = async () => {
+    // Load projects for active workspace, plus personal unlinked
     const { data } = await supabase
       .from("projects")
       .select("*")
+      .or(`workspace_id.eq.${activeWorkspaceId},and(workspace_id.is.null,user_id.eq.${user?.id})`)
+      .is("archived_at", null)
       .order("updated_at", { ascending: false });
     if (data) setProjects(data as ProjectRow[]);
   };
 
   const createProject = async () => {
     if (!newName.trim() || !user) return;
-    // Enforce project limit for free plan
     if (features.maxProjects > 0 && projects.length >= features.maxProjects) {
       toast.error(`You've reached the ${features.maxProjects} project limit on your plan`);
       return;
     }
     const { data, error } = await supabase
       .from("projects")
-      .insert({ name: newName, description: newDesc, user_id: user.id, workspace_id: workspaceId })
+      .insert({
+        name: newName,
+        description: newDesc,
+        user_id: user.id,
+        workspace_id: activeWorkspaceId || workspaceId,
+      })
       .select()
       .single();
     if (error) {
       toast.error(error.message);
     } else if (data) {
+      // Log activity
+      if (activeWorkspaceId) {
+        await supabase.from("activity_log").insert({
+          workspace_id: activeWorkspaceId,
+          user_id: user.id,
+          action: "project_created",
+          entity_type: "project",
+          entity_id: data.id,
+          metadata: { name: newName },
+        });
+      }
       resetScene();
       setDialogOpen(false);
       setNewName("");
@@ -81,12 +99,15 @@ export default function Dashboard() {
     <div className="min-h-screen bg-background">
       <nav className="border-b bg-card/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="container flex items-center justify-between h-14">
-          <span
-            className="font-display text-lg font-bold gradient-text cursor-pointer"
-            onClick={() => navigate("/")}
-          >
-            PromptScene
-          </span>
+          <div className="flex items-center gap-2">
+            <span
+              className="font-display text-lg font-bold gradient-text cursor-pointer"
+              onClick={() => navigate("/")}
+            >
+              PromptScene
+            </span>
+            <WorkspaceSwitcher />
+          </div>
           <div className="flex items-center gap-1.5">
             <PlanUsageBadge />
             <Button variant="ghost" size="sm" onClick={() => navigate("/templates")}>
@@ -109,6 +130,11 @@ export default function Dashboard() {
                 <div className="space-y-3 pt-2">
                   <Input placeholder="Project name" value={newName} onChange={(e) => setNewName(e.target.value)} />
                   <Input placeholder="Description (optional)" value={newDesc} onChange={(e) => setNewDesc(e.target.value)} />
+                  {activeWorkspace?.type === "team" && (
+                    <p className="text-[10px] text-muted-foreground">
+                      This project will be created in <strong>{activeWorkspace.name}</strong> and shared with team members.
+                    </p>
+                  )}
                   <Button className="w-full gradient-primary text-primary-foreground" onClick={createProject}>
                     Create & Open Builder
                   </Button>
@@ -125,7 +151,14 @@ export default function Dashboard() {
       <div className="container py-8 max-w-5xl">
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
           <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-bold font-display">Projects</h1>
+            <div>
+              <h1 className="text-2xl font-bold font-display">Projects</h1>
+              {activeWorkspace?.type === "team" && (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Shared in {activeWorkspace.name}
+                </p>
+              )}
+            </div>
             <span className="text-xs text-muted-foreground">{projects.length} project{projects.length !== 1 ? "s" : ""}</span>
           </div>
 

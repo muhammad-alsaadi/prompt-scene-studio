@@ -21,6 +21,7 @@ import { WorkspaceCanvas } from "@/components/editor/WorkspaceCanvas";
 import { VersionHistoryPanel } from "@/components/scene/VersionHistoryPanel";
 import { PlanUsageBadge } from "@/components/PlanUsageBadge";
 import { usePlan } from "@/hooks/use-plan";
+import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useEditorShortcuts } from "@/hooks/use-editor-shortcuts";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -56,6 +57,8 @@ export default function SceneBuilder() {
 
   const { canvasZoom, undoStack, redoStack, undo, redo, snapEnabled, showGrid, toggleSnap, toggleGrid, zoomIn, zoomOut, resetView } = useEditorStore();
   const { canGenerate, consumeCredits, plan, dailyUsesRemaining, creditBalance, workspaceId } = usePlan();
+  const { activeWorkspace, userRole } = useWorkspace();
+  const isViewerOnly = activeWorkspace?.type === "team" && userRole === "viewer";
   const availableModes = getModesForPlan(plan);
 
   useEffect(() => {
@@ -268,7 +271,7 @@ export default function SceneBuilder() {
               <Button
                 className="gradient-primary text-primary-foreground h-7 text-[11px] rounded-md px-3"
                 onClick={handleGenerate}
-                disabled={isGenerating || !generatedPrompt || !canGenerate()}
+                disabled={isGenerating || !generatedPrompt || !canGenerate() || isViewerOnly}
                 size="sm"
               >
                 {isGenerating ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Send className="h-3 w-3 mr-1" />}

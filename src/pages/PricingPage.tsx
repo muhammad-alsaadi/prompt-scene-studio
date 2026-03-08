@@ -2,21 +2,52 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Check, ArrowLeft, ExternalLink, Zap } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { PLANS, PlanDefinition, TELEGRAM_PAYMENT_URL } from "@/lib/plans";
+import { useWorkspace } from "@/contexts/WorkspaceContext";
+import { PLANS, PlanDefinition, PlanId, TELEGRAM_PAYMENT_URL } from "@/lib/plans";
 import { GENERATION_MODES } from "@/lib/providers";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
+const TEST_EMAIL = "muhammad.gruoth@gmail.com";
 const planOrder: PlanDefinition[] = [PLANS.free, PLANS.pro, PLANS.ultra, PLANS.team];
 
 export default function PricingPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { activeWorkspaceId, refreshWorkspaces } = useWorkspace();
 
-  const handleUpgrade = (plan: PlanDefinition) => {
+  const isTestUser = user?.email === TEST_EMAIL;
+
+  const handleUpgrade = async (plan: PlanDefinition) => {
     if (plan.id === "free") {
       navigate(user ? "/dashboard" : "/auth");
-    } else {
-      window.open(TELEGRAM_PAYMENT_URL, "_blank");
+      return;
     }
+
+    // Test user gets instant plan switching
+    if (isTestUser && activeWorkspaceId) {
+      try {
+        await supabase.from("workspaces").update({
+          plan: plan.id,
+          credit_balance: plan.features.monthlyCredits || 10000,
+        }).eq("id", activeWorkspaceId);
+
+        await supabase.from("subscription_state").update({
+          current_plan: plan.id,
+          status: "active",
+        }).eq("workspace_id", activeWorkspaceId);
+
+        await refreshWorkspaces();
+        toast.success(`Switched to ${plan.name} plan!`);
+        navigate("/dashboard");
+      } catch (err: any) {
+        toast.error(err.message || "Failed to switch plan");
+      }
+      return;
+    }
+
+    // Normal users go to Telegram
+    window.open(TELEGRAM_PAYMENT_URL, "_blank");
   };
 
   return (
@@ -36,6 +67,11 @@ export default function PricingPage() {
           <p className="text-muted-foreground text-sm max-w-md mx-auto">
             Credits are compute units — not "number of images." Different generation modes and providers consume different amounts.
           </p>
+          {isTestUser && (
+            <p className="text-xs text-primary mt-2 font-medium">
+              ✨ Test mode: Click any plan button to activate it instantly
+            </p>
+          )}
         </div>
 
         {/* Plan Cards */}
@@ -75,8 +111,14 @@ export default function PricingPage() {
                 variant={p.ctaVariant === "gradient" ? "default" : p.ctaVariant as any}
                 onClick={() => handleUpgrade(p)}
               >
-                {p.id !== "free" && <ExternalLink className="h-3 w-3 mr-1" />}
-                {p.cta}
+                {isTestUser ? (
+                  p.id === "free" ? "Go Free" : `Activate ${p.name}`
+                ) : (
+                  <>
+                    {p.id !== "free" && <ExternalLink className="h-3 w-3 mr-1" />}
+                    {p.cta}
+                  </>
+                )}
               </Button>
             </div>
           ))}
@@ -92,8 +134,8 @@ export default function PricingPage() {
                 <h3 className="font-display font-semibold text-sm mb-1">{m.name}</h3>
                 <p className="text-xs text-muted-foreground mb-3 leading-relaxed">{m.description}</p>
                 <div className="flex flex-wrap gap-1">
-                  {m.availableOnPlans.map(p => (
-                    <span key={p} className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground capitalize">{p}</span>
+                  {m.availableOnPlans.map(pl => (
+                    <span key={pl} className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground capitalize">{pl}</span>
                   ))}
                 </div>
               </div>
