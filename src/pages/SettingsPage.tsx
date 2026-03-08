@@ -21,6 +21,7 @@ import { TeamSettingsPanel } from "@/components/workspace/TeamSettingsPanel";
 import { TeamActivityPanel } from "@/components/workspace/TeamActivityPanel";
 import { SharedAssetsPanel } from "@/components/workspace/SharedAssetsPanel";
 import { SharedBrandKitsPanel } from "@/components/workspace/SharedBrandKitsPanel";
+import { BrandKitManager } from "@/components/settings/BrandKitManager";
 import { SettingsProfileSection } from "@/components/settings/SettingsProfileSection";
 import { SettingsPlanSection } from "@/components/settings/SettingsPlanSection";
 import { SettingsAppearanceSection } from "@/components/settings/SettingsAppearanceSection";
@@ -99,7 +100,7 @@ export default function SettingsPage() {
               <h2 className="font-display font-semibold text-sm flex items-center gap-2 mb-4">
                 <Palette className="h-4 w-4 text-primary" /> Brand Kits
               </h2>
-              <SharedBrandKitsPanel />
+              <BrandKitManager />
             </section>
             <section className="rounded-xl border bg-card p-5">
               <h2 className="font-display font-semibold text-sm flex items-center gap-2 mb-4">
