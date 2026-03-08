@@ -31,7 +31,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { resetScene } = useSceneStore();
   const { user, signOut } = useAuth();
-  const { features } = usePlan();
+  const { features, workspaceId } = usePlan();
   const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
