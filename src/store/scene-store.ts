@@ -49,6 +49,7 @@ interface SceneStore {
   toggleObjectVisibility: (id: string) => void;
   toggleObjectLock: (id: string) => void;
   reorderObject: (id: string, direction: "up" | "down") => void;
+  moveObjectToIndex: (fromIndex: number, toIndex: number) => void;
   selectObject: (id: string | null) => void;
   rebuildPrompt: () => void;
   generateImage: (plan: PlanId, workspaceId?: string) => void;
@@ -234,6 +235,16 @@ export const useSceneStore = create<SceneStore>((set, get) => ({
     const newIdx = direction === "up" ? idx - 1 : idx + 1;
     if (newIdx < 0 || newIdx >= objects.length) return;
     [objects[idx], objects[newIdx]] = [objects[newIdx], objects[idx]];
+    const newScene = { ...currentScene, objects };
+    set({ currentScene: newScene, isDirty: true });
+  },
+
+  moveObjectToIndex: (fromIndex, toIndex) => {
+    const { currentScene } = get();
+    const objects = [...currentScene.objects];
+    if (fromIndex < 0 || fromIndex >= objects.length || toIndex < 0 || toIndex >= objects.length) return;
+    const [moved] = objects.splice(fromIndex, 1);
+    objects.splice(toIndex, 0, moved);
     const newScene = { ...currentScene, objects };
     set({ currentScene: newScene, isDirty: true });
   },
