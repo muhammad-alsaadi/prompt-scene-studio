@@ -22,7 +22,10 @@ import { useSceneStore } from "@/store/scene-store";
 import { SceneEditorPanel } from "@/components/scene/SceneEditorPanel";
 import { ObjectsPanel } from "@/components/scene/ObjectsPanel";
 import { VersionHistoryPanel } from "@/components/scene/VersionHistoryPanel";
+import { PlanUsageBadge } from "@/components/PlanUsageBadge";
+import { usePlan } from "@/hooks/use-plan";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 type RightPanel = "inspector" | "history";
 
