@@ -40,7 +40,38 @@ function getObjIcon(obj: SceneObject) {
 
 // ─── Layer Row ────────────────────────────────────────────────────
 
-function LayerRow({ obj, index }: { obj: SceneObject; index: number }) {
+function LayerThumbnail({ obj }: { obj: SceneObject }) {
+  if (obj.objectType === "uploaded_image" && obj.asset_url) {
+    return (
+      <div className="w-7 h-7 rounded border border-border/50 overflow-hidden shrink-0 bg-muted/30">
+        <img src={obj.asset_url} alt="" className="w-full h-full object-cover" />
+      </div>
+    );
+  }
+
+  if (obj.objectType === "text") {
+    return (
+      <div className="w-7 h-7 rounded border border-border/50 shrink-0 bg-muted/30 flex items-center justify-center">
+        <Type className="h-3 w-3 text-muted-foreground" />
+      </div>
+    );
+  }
+
+  const Icon = OBJ_ICONS[obj.objectType || "generic"] || Box;
+  return (
+    <div className="w-7 h-7 rounded border border-border/50 shrink-0 bg-muted/30 flex items-center justify-center">
+      <Icon className="h-3 w-3 text-muted-foreground" />
+    </div>
+  );
+}
+
+function LayerRow({ obj, index, onDragStart, onDragOver, onDrop }: {
+  obj: SceneObject;
+  index: number;
+  onDragStart: (e: React.DragEvent, idx: number) => void;
+  onDragOver: (e: React.DragEvent, idx: number) => void;
+  onDrop: (e: React.DragEvent, idx: number) => void;
+}) {
   const { removeObject, toggleObjectVisibility, toggleObjectLock, duplicateObject, selectObject, selectedObjectId } = useSceneStore();
   const { selectedIds, select, toggleSelect, setHovered } = useEditorStore();
   const { features, requireFeature } = usePlan();
@@ -48,11 +79,14 @@ function LayerRow({ obj, index }: { obj: SceneObject; index: number }) {
   const isSelected = selectedIds.has(obj.id) || selectedObjectId === obj.id;
   const isVisible = obj.visible ?? true;
   const isLocked = obj.locked ?? false;
-  const Icon = getObjIcon(obj);
 
   return (
     <div
-      className={`group flex items-center gap-1 px-1.5 py-1 rounded-md cursor-pointer transition-all text-[11px] ${
+      draggable
+      onDragStart={(e) => onDragStart(e, index)}
+      onDragOver={(e) => onDragOver(e, index)}
+      onDrop={(e) => onDrop(e, index)}
+      className={`group flex items-center gap-1.5 px-1.5 py-1 rounded-md cursor-pointer transition-all text-[11px] ${
         isSelected ? "bg-primary/10 text-primary ring-1 ring-primary/20" : "hover:bg-secondary/60"
       } ${!isVisible ? "opacity-40" : ""}`}
       onClick={(e) => {
@@ -66,9 +100,9 @@ function LayerRow({ obj, index }: { obj: SceneObject; index: number }) {
       onMouseEnter={() => setHovered(obj.id)}
       onMouseLeave={() => setHovered(null)}
     >
-      <GripVertical className="h-3 w-3 text-muted-foreground/30 shrink-0 opacity-0 group-hover:opacity-100 cursor-grab" />
-      <Icon className="h-3 w-3 shrink-0 text-muted-foreground" />
-      <span className="flex-1 truncate font-medium capitalize">
+      <GripVertical className="h-3 w-3 text-muted-foreground/30 shrink-0 cursor-grab" />
+      <LayerThumbnail obj={obj} />
+      <span className="flex-1 truncate font-medium capitalize text-[10px]">
         {obj.name || obj.type || `Object ${index + 1}`}
       </span>
 

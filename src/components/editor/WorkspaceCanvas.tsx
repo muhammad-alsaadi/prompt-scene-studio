@@ -458,13 +458,99 @@ export function WorkspaceCanvas({ artboardWidth = 1024, artboardHeight = 1024, a
 
   const firstSelectedId = selectedIds.size === 1 ? Array.from(selectedIds)[0] : null;
 
+  // ─── Drag & Drop Image Upload ─────────────────────────────────
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer.types.includes("Files")) {
+      setDragOver(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/"));
+    if (files.length === 0) return;
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { toast.error("Please sign in to upload images"); return; }
+
+    // Calculate drop position relative to artboard
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const dropX = (e.clientX - rect.left - canvasPanX) / canvasZoom;
+    const dropY = (e.clientY - rect.top - canvasPanY) / canvasZoom;
+
+    for (const file of files.slice(0, 5)) {
+      try {
+        const ext = file.name.split(".").pop() || "png";
+        const fileName = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("user-assets")
+          .upload(fileName, file, { contentType: file.type });
+
+        if (uploadError) throw uploadError;
+
+        const { data: urlData } = supabase.storage
+          .from("user-assets")
+          .getPublicUrl(fileName);
+
+        // Get image dimensions
+        const img = new Image();
+        const url = urlData.publicUrl;
+        await new Promise<void>((resolve) => {
+          img.onload = () => resolve();
+          img.onerror = () => resolve();
+          img.src = url;
+        });
+
+        const natW = img.naturalWidth || 300;
+        const natH = img.naturalHeight || 300;
+        const maxDim = 400;
+        const scale = Math.min(maxDim / natW, maxDim / natH, 1);
+        const w = Math.round(natW * scale);
+        const h = Math.round(natH * scale);
+
+        addObject({
+          type: "uploaded_image",
+          objectType: "uploaded_image",
+          name: file.name.replace(/\.[^.]+$/, ""),
+          asset_url: url,
+          native_width: natW,
+          native_height: natH,
+          x: Math.max(0, dropX - w / 2),
+          y: Math.max(0, dropY - h / 2),
+          width: w,
+          height: h,
+        });
+
+        toast.success(`Added "${file.name}"`);
+      } catch (err: any) {
+        console.error("Upload error:", err);
+        toast.error(`Failed to upload ${file.name}`);
+      }
+    }
+  }, [canvasZoom, canvasPanX, canvasPanY, addObject]);
+
   return (
     <div
       ref={containerRef}
-      className={`flex-1 overflow-hidden relative ${showGrid ? "scene-grid" : ""}`}
+      className={`flex-1 overflow-hidden relative ${showGrid ? "scene-grid" : ""} ${dragOver ? "ring-2 ring-primary ring-inset" : ""}`}
       style={{ cursor: isInPanMode ? (panning ? "grabbing" : "grab") : "default" }}
       onMouseDown={handleCanvasMouseDown}
       onContextMenu={handleContextMenu}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
     >
       <div
         className="absolute origin-top-left"
