@@ -5,20 +5,42 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { usePlan } from "@/hooks/use-plan";
+import { UpgradePrompt } from "@/components/UpgradePrompt";
 import {
   Plus, Trash2, Box, Eye, EyeOff, Lock, Unlock, Copy, ChevronUp, ChevronDown,
 } from "lucide-react";
 import { SceneObject } from "@/types/scene";
+import { toast } from "sonner";
 
 function ObjectRow({ obj }: { obj: SceneObject }) {
   const {
     selectedObjectId, selectObject, removeObject,
     toggleObjectVisibility, toggleObjectLock, duplicateObject,
   } = useSceneStore();
+  const { features, requireFeature } = usePlan();
 
   const isSelected = selectedObjectId === obj.id;
   const isVisible = obj.visible ?? true;
   const isLocked = obj.locked ?? false;
+
+  const handleVisibility = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!requireFeature("lockHideObjects", "Hide/Show objects")) return;
+    toggleObjectVisibility(obj.id);
+  };
+
+  const handleLock = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!requireFeature("lockHideObjects", "Lock/Unlock objects")) return;
+    toggleObjectLock(obj.id);
+  };
+
+  const handleDuplicate = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!requireFeature("duplicateObjects", "Duplicate objects")) return;
+    duplicateObject(obj.id);
+  };
 
   return (
     <div
@@ -31,13 +53,13 @@ function ObjectRow({ obj }: { obj: SceneObject }) {
       <span className="flex-1 truncate capitalize font-medium">{obj.type}</span>
       {obj.color && <span className="text-[10px] text-muted-foreground hidden group-hover:inline">({obj.color})</span>}
       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button className="p-0.5 hover:text-primary" onClick={(e) => { e.stopPropagation(); toggleObjectVisibility(obj.id); }}>
+        <button className="p-0.5 hover:text-primary" onClick={handleVisibility}>
           {isVisible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3 text-muted-foreground" />}
         </button>
-        <button className="p-0.5 hover:text-primary" onClick={(e) => { e.stopPropagation(); toggleObjectLock(obj.id); }}>
+        <button className="p-0.5 hover:text-primary" onClick={handleLock}>
           {isLocked ? <Lock className="h-3 w-3 text-warning" /> : <Unlock className="h-3 w-3" />}
         </button>
-        <button className="p-0.5 hover:text-primary" onClick={(e) => { e.stopPropagation(); duplicateObject(obj.id); }}>
+        <button className="p-0.5 hover:text-primary" onClick={handleDuplicate}>
           <Copy className="h-3 w-3" />
         </button>
         <button className="p-0.5 hover:text-destructive" onClick={(e) => { e.stopPropagation(); removeObject(obj.id); }}>
@@ -127,9 +149,19 @@ function ObjectInspector({ obj }: { obj: SceneObject }) {
 
 export function ObjectsPanel() {
   const { currentScene, addObject, selectedObjectId } = useSceneStore();
+  const { features } = usePlan();
   const [showPresets, setShowPresets] = useState(false);
 
   const selectedObj = currentScene.objects.find(o => o.id === selectedObjectId);
+  const atLimit = features.maxObjectsPerArtboard > 0 && currentScene.objects.length >= features.maxObjectsPerArtboard;
+
+  const handleAddObject = (obj?: Partial<SceneObject>) => {
+    if (atLimit) {
+      toast.error(`Maximum ${features.maxObjectsPerArtboard} objects on your plan`);
+      return;
+    }
+    addObject(obj || { type: "new object" });
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -142,12 +174,19 @@ export function ObjectsPanel() {
           <Button
             size="sm"
             className="h-6 text-[10px] px-2 gradient-primary text-primary-foreground"
-            onClick={() => addObject({ type: "new object" })}
+            onClick={() => handleAddObject()}
+            disabled={atLimit}
           >
             <Plus className="h-3 w-3" />
           </Button>
         </div>
       </div>
+
+      {atLimit && (
+        <div className="px-3 py-2 border-b">
+          <UpgradePrompt feature="More objects" planRequired="Pro" compact />
+        </div>
+      )}
 
       {showPresets && (
         <div className="px-3 py-2 border-b bg-secondary/30">
@@ -156,7 +195,7 @@ export function ObjectsPanel() {
               <button
                 key={p.type}
                 className="px-2 py-0.5 text-[10px] rounded-md bg-card border hover:border-primary/40 transition-colors capitalize"
-                onClick={() => { addObject(p); setShowPresets(false); }}
+                onClick={() => { handleAddObject(p); setShowPresets(false); }}
               >
                 {p.type}
               </button>
@@ -178,7 +217,6 @@ export function ObjectsPanel() {
         )}
       </div>
 
-      {/* Inline inspector for selected object */}
       {selectedObj && <ObjectInspector obj={selectedObj} />}
     </div>
   );

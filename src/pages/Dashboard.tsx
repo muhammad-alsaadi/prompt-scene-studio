@@ -8,6 +8,8 @@ import { useSceneStore } from "@/store/scene-store";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { usePlan } from "@/hooks/use-plan";
+import { PlanUsageBadge } from "@/components/PlanUsageBadge";
 import {
   Dialog,
   DialogContent,
@@ -29,6 +31,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { resetScene } = useSceneStore();
   const { user, signOut } = useAuth();
+  const { features } = usePlan();
   const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
@@ -48,6 +51,11 @@ export default function Dashboard() {
 
   const createProject = async () => {
     if (!newName.trim() || !user) return;
+    // Enforce project limit for free plan
+    if (features.maxProjects > 0 && projects.length >= features.maxProjects) {
+      toast.error(`You've reached the ${features.maxProjects} project limit on your plan`);
+      return;
+    }
     const { data, error } = await supabase
       .from("projects")
       .insert({ name: newName, description: newDesc, user_id: user.id })
@@ -80,6 +88,7 @@ export default function Dashboard() {
             PromptScene
           </span>
           <div className="flex items-center gap-1.5">
+            <PlanUsageBadge />
             <Button variant="ghost" size="sm" onClick={() => navigate("/templates")}>
               <LayoutTemplate className="h-4 w-4 mr-1.5" />
               <span className="hidden sm:inline">Templates</span>
