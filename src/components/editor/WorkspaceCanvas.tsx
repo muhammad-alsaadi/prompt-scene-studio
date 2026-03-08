@@ -1,9 +1,11 @@
-// Workspace canvas with pan/zoom, artboard rendering, object selection, context menu
+// Workspace canvas with pan/zoom, artboard rendering, object selection, context menu, drag-drop upload
 import React, { useRef, useState, useCallback, useEffect } from "react";
 import { useEditorStore } from "@/store/editor-store";
 import { useSceneStore } from "@/store/scene-store";
 import { SceneObject } from "@/types/scene";
 import { usePlan } from "@/hooks/use-plan";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import {
   ImageIcon, Type, Box, Star, Layers, Copy, Trash2, Lock, Unlock,
   Eye, EyeOff, ArrowUp, ArrowDown, Scissors, ClipboardPaste,
