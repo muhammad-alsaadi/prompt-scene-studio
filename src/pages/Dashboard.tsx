@@ -49,8 +49,6 @@ export default function Dashboard() {
     if (data) setProjects(data as ProjectRow[]);
   };
 
-  const { features, workspaceId } = usePlan();
-
   const createProject = async () => {
     if (!newName.trim() || !user) return;
     // Enforce project limit for free plan
