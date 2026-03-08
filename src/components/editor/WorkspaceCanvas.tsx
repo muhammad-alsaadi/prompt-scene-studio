@@ -1,10 +1,13 @@
-// Workspace canvas with pan/zoom, artboard rendering, object selection
-import React, { useRef, useState, useCallback } from "react";
+// Workspace canvas with pan/zoom, artboard rendering, object selection, context menu
+import React, { useRef, useState, useCallback, useEffect } from "react";
 import { useEditorStore } from "@/store/editor-store";
 import { useSceneStore } from "@/store/scene-store";
 import { SceneObject } from "@/types/scene";
 import { usePlan } from "@/hooks/use-plan";
-import { ImageIcon, Type, Box, Star, Layers } from "lucide-react";
+import {
+  ImageIcon, Type, Box, Star, Layers, Copy, Trash2, Lock, Unlock,
+  Eye, EyeOff, ArrowUp, ArrowDown, Scissors, ClipboardPaste,
+} from "lucide-react";
 
 const OBJECT_TYPE_ICONS: Record<string, typeof Box> = {
   text: Type,
@@ -13,20 +16,22 @@ const OBJECT_TYPE_ICONS: Record<string, typeof Box> = {
   background_element: Layers,
 };
 
+// ─── Canvas Object ────────────────────────────────────────────────
+
 interface CanvasObjectProps {
   obj: SceneObject;
   zoom: number;
   isSelected: boolean;
   isHovered: boolean;
+  isPanning: boolean;
   onSelect: (id: string, multi: boolean) => void;
   onHover: (id: string | null) => void;
   onMove: (id: string, dx: number, dy: number) => void;
   onResize: (id: string, w: number, h: number) => void;
 }
 
-function CanvasObject({ obj, zoom, isSelected, isHovered, onSelect, onHover, onMove, onResize }: CanvasObjectProps) {
+function CanvasObject({ obj, zoom, isSelected, isHovered, isPanning, onSelect, onHover, onMove, onResize }: CanvasObjectProps) {
   const [dragging, setDragging] = useState(false);
-  const [resizing, setResizing] = useState(false);
   const startRef = useRef({ x: 0, y: 0, ox: 0, oy: 0, w: 0, h: 0 });
 
   const x = obj.x ?? 50;
@@ -41,7 +46,7 @@ function CanvasObject({ obj, zoom, isSelected, isHovered, onSelect, onHover, onM
   if (!isVisible) return null;
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (isLocked) return;
+    if (isLocked || isPanning) return;
     e.stopPropagation();
     onSelect(obj.id, e.shiftKey);
     setDragging(true);
@@ -64,9 +69,8 @@ function CanvasObject({ obj, zoom, isSelected, isHovered, onSelect, onHover, onM
   };
 
   const handleResizeDown = (e: React.MouseEvent) => {
-    if (isLocked) return;
+    if (isLocked || isPanning) return;
     e.stopPropagation();
-    setResizing(true);
     startRef.current = { x: e.clientX, y: e.clientY, ox: x, oy: y, w, h };
 
     const handleMouseMove = (e: MouseEvent) => {
@@ -76,7 +80,6 @@ function CanvasObject({ obj, zoom, isSelected, isHovered, onSelect, onHover, onM
     };
 
     const handleMouseUp = () => {
-      setResizing(false);
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
@@ -106,9 +109,7 @@ function CanvasObject({ obj, zoom, isSelected, isHovered, onSelect, onHover, onM
     }
 
     if (obj.objectType === "uploaded_image" && obj.asset_url) {
-      return (
-        <img src={obj.asset_url} alt={obj.name || obj.type} className="w-full h-full object-contain" />
-      );
+      return <img src={obj.asset_url} alt={obj.name || obj.type} className="w-full h-full object-contain" />;
     }
 
     return (
@@ -130,36 +131,41 @@ function CanvasObject({ obj, zoom, isSelected, isHovered, onSelect, onHover, onM
         transform: rotation ? `rotate(${rotation}deg)` : undefined,
         opacity,
         zIndex: obj.zIndex ?? 1,
-        cursor: isLocked ? "not-allowed" : dragging ? "grabbing" : "grab",
+        cursor: isLocked ? "not-allowed" : isPanning ? "grab" : dragging ? "grabbing" : "default",
+        pointerEvents: isPanning ? "none" : "auto",
       }}
       onMouseDown={handleMouseDown}
-      onMouseEnter={() => onHover(obj.id)}
+      onMouseEnter={() => !isPanning && onHover(obj.id)}
       onMouseLeave={() => onHover(null)}
     >
-      {/* Object body */}
       <div
         className={`w-full h-full rounded border transition-colors ${
           isSelected
-            ? "border-primary ring-1 ring-primary/30 bg-primary/5"
+            ? "border-primary ring-2 ring-primary/30 bg-primary/5"
             : isHovered
               ? "border-primary/40 bg-muted/20"
-              : "border-border/50 bg-card/30"
+              : "border-border/40 bg-card/20"
         }`}
       >
         {renderContent()}
       </div>
 
-      {/* Resize handle */}
+      {/* Selection handles */}
       {isSelected && !isLocked && (
-        <div
-          className="absolute -right-1 -bottom-1 w-3 h-3 bg-primary rounded-sm cursor-se-resize border border-primary-foreground"
-          onMouseDown={handleResizeDown}
-        />
+        <>
+          {/* Corner handles */}
+          <div className="absolute -left-1.5 -top-1.5 w-3 h-3 bg-primary rounded-sm border border-primary-foreground cursor-nw-resize" />
+          <div className="absolute -right-1.5 -top-1.5 w-3 h-3 bg-primary rounded-sm border border-primary-foreground cursor-ne-resize" />
+          <div className="absolute -left-1.5 -bottom-1.5 w-3 h-3 bg-primary rounded-sm border border-primary-foreground cursor-sw-resize" />
+          <div
+            className="absolute -right-1.5 -bottom-1.5 w-3 h-3 bg-primary rounded-sm border border-primary-foreground cursor-se-resize"
+            onMouseDown={handleResizeDown}
+          />
+        </>
       )}
 
-      {/* Lock indicator */}
       {isLocked && isSelected && (
-        <div className="absolute -top-2 -right-2 w-4 h-4 rounded-full bg-warning flex items-center justify-center text-[8px] text-warning-foreground">🔒</div>
+        <div className="absolute -top-2 -right-2 w-4 h-4 rounded-full bg-warning flex items-center justify-center text-[8px]">🔒</div>
       )}
     </div>
   );
@@ -184,7 +190,6 @@ function SnapLines({ objects, selectedId, artboardW, artboardH }: {
   const lines: React.ReactNode[] = [];
   const threshold = 5;
 
-  // Center lines to artboard
   if (Math.abs(sCx - artboardW / 2) < threshold) {
     lines.push(<line key="vcenter" x1={artboardW / 2} y1={0} x2={artboardW / 2} y2={artboardH} stroke="hsl(var(--primary))" strokeWidth="1" strokeDasharray="4 4" opacity="0.6" />);
   }
@@ -192,7 +197,6 @@ function SnapLines({ objects, selectedId, artboardW, artboardH }: {
     lines.push(<line key="hcenter" x1={0} y1={artboardH / 2} x2={artboardW} y2={artboardH / 2} stroke="hsl(var(--primary))" strokeWidth="1" strokeDasharray="4 4" opacity="0.6" />);
   }
 
-  // Edge alignment to other objects
   objects.forEach(o => {
     if (o.id === selectedId) return;
     const ox = o.x ?? 0, oy = o.y ?? 0;
@@ -211,6 +215,114 @@ function SnapLines({ objects, selectedId, artboardW, artboardH }: {
   );
 }
 
+// ─── Context Menu ─────────────────────────────────────────────────
+
+function CanvasContextMenu() {
+  const { contextMenu, closeContextMenu, selectedIds, copyToClipboard, clipboard } = useEditorStore();
+  const { currentScene, removeObject, duplicateObject, toggleObjectVisibility, toggleObjectLock, reorderObject, addObject } = useSceneStore();
+
+  useEffect(() => {
+    const handler = () => closeContextMenu();
+    if (contextMenu) {
+      window.addEventListener("click", handler);
+      window.addEventListener("keydown", handler);
+    }
+    return () => {
+      window.removeEventListener("click", handler);
+      window.removeEventListener("keydown", handler);
+    };
+  }, [contextMenu]);
+
+  if (!contextMenu) return null;
+
+  const targetObj = contextMenu.targetId ? currentScene.objects.find(o => o.id === contextMenu.targetId) : null;
+  const hasSelection = selectedIds.size > 0;
+
+  const items: { label: string; icon: typeof Box; action: () => void; danger?: boolean; disabled?: boolean; separator?: boolean }[] = [];
+
+  if (targetObj) {
+    items.push({ label: "Duplicate", icon: Copy, action: () => { duplicateObject(targetObj.id); closeContextMenu(); } });
+    items.push({ label: "Delete", icon: Trash2, action: () => { removeObject(targetObj.id); closeContextMenu(); }, danger: true });
+    items.push({ label: "", icon: Box, action: () => {}, separator: true });
+    items.push({ label: targetObj.locked ? "Unlock" : "Lock", icon: targetObj.locked ? Unlock : Lock, action: () => { toggleObjectLock(targetObj.id); closeContextMenu(); } });
+    items.push({ label: (targetObj.visible ?? true) ? "Hide" : "Show", icon: (targetObj.visible ?? true) ? EyeOff : Eye, action: () => { toggleObjectVisibility(targetObj.id); closeContextMenu(); } });
+    items.push({ label: "", icon: Box, action: () => {}, separator: true });
+    items.push({ label: "Bring Forward", icon: ArrowUp, action: () => { reorderObject(targetObj.id, "up"); closeContextMenu(); } });
+    items.push({ label: "Send Backward", icon: ArrowDown, action: () => { reorderObject(targetObj.id, "down"); closeContextMenu(); } });
+  }
+
+  if (hasSelection) {
+    if (!targetObj) items.push({ label: "", icon: Box, action: () => {}, separator: true });
+    items.push({
+      label: "Copy",
+      icon: Scissors,
+      action: () => {
+        const objs = currentScene.objects.filter(o => selectedIds.has(o.id));
+        copyToClipboard(objs);
+        closeContextMenu();
+      },
+    });
+  }
+
+  if (clipboard.length > 0) {
+    items.push({
+      label: "Paste",
+      icon: ClipboardPaste,
+      action: () => {
+        clipboard.forEach(obj => {
+          addObject({ ...obj, id: undefined as any, x: (obj.x ?? 100) + 20, y: (obj.y ?? 100) + 20 });
+        });
+        closeContextMenu();
+      },
+    });
+  }
+
+  if (!targetObj && !hasSelection && clipboard.length === 0) {
+    items.push({
+      label: "Add Object",
+      icon: Box,
+      action: () => {
+        addObject({ type: "object", objectType: "generic", x: 100, y: 100, width: 120, height: 80 });
+        closeContextMenu();
+      },
+    });
+    items.push({
+      label: "Add Text",
+      icon: Type,
+      action: () => {
+        addObject({ type: "text", objectType: "text", textContent: "Edit me", x: 100, y: 100, width: 200, height: 40, fontSize: 16 });
+        closeContextMenu();
+      },
+    });
+  }
+
+  return (
+    <div
+      className="fixed z-[100] min-w-[160px] rounded-lg border bg-popover shadow-lg py-1 animate-in fade-in-0 zoom-in-95"
+      style={{ left: contextMenu.x, top: contextMenu.y }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {items.map((item, i) => {
+        if (item.separator) {
+          return <div key={`sep-${i}`} className="h-px bg-border my-1" />;
+        }
+        return (
+          <button
+            key={item.label}
+            className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-accent transition-colors ${
+              item.danger ? "text-destructive hover:text-destructive" : ""
+            } ${item.disabled ? "opacity-40 pointer-events-none" : ""}`}
+            onClick={item.action}
+          >
+            <item.icon className="h-3.5 w-3.5" />
+            {item.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Main Canvas ──────────────────────────────────────────────────
 
 interface WorkspaceCanvasProps {
@@ -221,34 +333,88 @@ interface WorkspaceCanvasProps {
 }
 
 export function WorkspaceCanvas({ artboardWidth = 1024, artboardHeight = 1024, artboardBg = "#ffffff", generatedImageUrl }: WorkspaceCanvasProps) {
-  const { canvasZoom, canvasPanX, canvasPanY, setPan, setZoom, selectedIds, select, deselect, setHovered, hoveredId, snapEnabled, showGrid } = useEditorStore();
+  const {
+    canvasZoom, canvasPanX, canvasPanY, setPan, setZoom, selectedIds, select, deselect,
+    setHovered, hoveredId, snapEnabled, showGrid, spaceHeld, openContextMenu, closeContextMenu,
+    zoomToFit,
+  } = useEditorStore();
   const { currentScene, updateObject } = useSceneStore();
   const containerRef = useRef<HTMLDivElement>(null);
   const [panning, setPanning] = useState(false);
   const panStart = useRef({ x: 0, y: 0, px: 0, py: 0 });
+  const [fitted, setFitted] = useState(false);
 
-  const handleWheel = useCallback((e: React.WheelEvent) => {
+  // Auto zoom-to-fit on first render
+  useEffect(() => {
+    if (!fitted && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      zoomToFit(artboardWidth, artboardHeight, rect.width, rect.height);
+      setFitted(true);
+    }
+  }, [artboardWidth, artboardHeight, fitted]);
+
+  const isInPanMode = spaceHeld || panning;
+
+  // Wheel: ctrl/meta = zoom, otherwise = pan
+  const handleWheel = useCallback((e: WheelEvent) => {
+    e.preventDefault();
     if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      const delta = e.deltaY > 0 ? 0.9 : 1.1;
-      setZoom(canvasZoom * delta);
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      const factor = e.deltaY > 0 ? 0.92 : 1.08;
+      const newZoom = Math.max(0.05, Math.min(5, canvasZoom * factor));
+      // Zoom toward cursor
+      const newPanX = mouseX - (mouseX - canvasPanX) * (newZoom / canvasZoom);
+      const newPanY = mouseY - (mouseY - canvasPanY) * (newZoom / canvasZoom);
+      setZoom(newZoom);
+      setPan(newPanX, newPanY);
     } else {
       setPan(canvasPanX - e.deltaX, canvasPanY - e.deltaY);
     }
   }, [canvasZoom, canvasPanX, canvasPanY]);
 
+  // Attach wheel with { passive: false } to prevent page scroll
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    el.addEventListener("wheel", handleWheel, { passive: false });
+    return () => el.removeEventListener("wheel", handleWheel);
+  }, [handleWheel]);
+
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
-    // Middle click or space+click for panning
-    if (e.button === 1) {
+    closeContextMenu();
+
+    // Middle click or space held = panning
+    if (e.button === 1 || (e.button === 0 && spaceHeld)) {
       e.preventDefault();
       startPan(e);
       return;
     }
 
     // Click on empty canvas = deselect
-    if (e.target === e.currentTarget || (e.target as HTMLElement).dataset.artboard === "true") {
-      deselect();
+    if (e.button === 0) {
+      if (e.target === e.currentTarget || (e.target as HTMLElement).dataset.artboard === "true") {
+        deselect();
+        useSceneStore.getState().selectObject(null);
+      }
     }
+  };
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    openContextMenu(e.clientX, e.clientY, null);
+  };
+
+  const handleObjectContextMenu = (e: React.MouseEvent, objId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!selectedIds.has(objId)) {
+      select(objId);
+      useSceneStore.getState().selectObject(objId);
+    }
+    openContextMenu(e.clientX, e.clientY, objId);
   };
 
   const startPan = (e: React.MouseEvent) => {
@@ -292,9 +458,9 @@ export function WorkspaceCanvas({ artboardWidth = 1024, artboardHeight = 1024, a
     <div
       ref={containerRef}
       className={`flex-1 overflow-hidden relative ${showGrid ? "scene-grid" : ""}`}
-      style={{ cursor: panning ? "grabbing" : "default" }}
-      onWheel={handleWheel}
+      style={{ cursor: isInPanMode ? (panning ? "grabbing" : "grab") : "default" }}
       onMouseDown={handleCanvasMouseDown}
+      onContextMenu={handleContextMenu}
     >
       <div
         className="absolute origin-top-left"
@@ -305,17 +471,19 @@ export function WorkspaceCanvas({ artboardWidth = 1024, artboardHeight = 1024, a
       >
         {/* Artboard */}
         <div
-          className="relative shadow-xl rounded-sm border border-border/60"
+          className="relative shadow-xl rounded-sm"
           style={{
             width: artboardWidth,
             height: artboardHeight,
             backgroundColor: artboardBg,
-            marginLeft: 100,
-            marginTop: 80,
+            boxShadow: "0 4px 40px rgba(0,0,0,0.12)",
           }}
           data-artboard="true"
           onMouseDown={(e) => {
-            if (e.target === e.currentTarget) deselect();
+            if (e.button === 0 && !spaceHeld && e.target === e.currentTarget) {
+              deselect();
+              useSceneStore.getState().selectObject(null);
+            }
           }}
         >
           {/* Generated image as background */}
@@ -339,33 +507,38 @@ export function WorkspaceCanvas({ artboardWidth = 1024, artboardHeight = 1024, a
 
           {/* Objects */}
           {currentScene.objects.map((obj) => (
-            <CanvasObject
-              key={obj.id}
-              obj={obj}
-              zoom={canvasZoom}
-              isSelected={selectedIds.has(obj.id)}
-              isHovered={hoveredId === obj.id}
-              onSelect={(id, multi) => {
-                select(id, multi);
-                useSceneStore.getState().selectObject(id);
-              }}
-              onHover={setHovered}
-              onMove={handleObjectMove}
-              onResize={handleObjectResize}
-            />
+            <div key={obj.id} onContextMenu={(e) => handleObjectContextMenu(e, obj.id)}>
+              <CanvasObject
+                obj={obj}
+                zoom={canvasZoom}
+                isSelected={selectedIds.has(obj.id)}
+                isHovered={hoveredId === obj.id}
+                isPanning={isInPanMode}
+                onSelect={(id, multi) => {
+                  select(id, multi);
+                  useSceneStore.getState().selectObject(id);
+                }}
+                onHover={setHovered}
+                onMove={handleObjectMove}
+                onResize={handleObjectResize}
+              />
+            </div>
           ))}
 
           {/* Artboard label */}
-          <div className="absolute -top-6 left-0 text-[10px] text-muted-foreground font-display font-medium">
+          <div className="absolute -top-7 left-0 text-[11px] text-muted-foreground font-display font-medium whitespace-nowrap">
             {artboardWidth} × {artboardHeight}
           </div>
         </div>
       </div>
 
       {/* Zoom indicator */}
-      <div className="absolute bottom-3 right-3 bg-card/90 backdrop-blur border rounded-md px-2 py-1 text-[10px] text-muted-foreground font-mono z-10">
+      <div className="absolute bottom-3 right-3 bg-card/90 backdrop-blur border rounded-md px-2.5 py-1.5 text-[10px] text-muted-foreground font-mono z-10 select-none">
         {Math.round(canvasZoom * 100)}%
       </div>
+
+      {/* Context menu */}
+      <CanvasContextMenu />
     </div>
   );
 }

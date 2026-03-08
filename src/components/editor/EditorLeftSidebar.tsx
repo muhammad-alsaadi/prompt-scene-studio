@@ -1,5 +1,5 @@
-// Left sidebar: Artboard list + Layer/Object navigator
-import React, { useState } from "react";
+// Left sidebar: Artboard list + Layer/Object navigator + Brand Kit + Provider
+import React, { useState, useEffect } from "react";
 import { useSceneStore } from "@/store/scene-store";
 import { useEditorStore } from "@/store/editor-store";
 import { usePlan } from "@/hooks/use-plan";
@@ -7,14 +7,20 @@ import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { PRESET_OBJECTS } from "@/lib/scene-utils";
 import { ARTBOARD_PRESETS } from "@/lib/artboard-presets";
 import { SceneObject, ObjectType } from "@/types/scene";
+import { PROVIDERS, getProvidersForPlan, GENERATION_MODES, getModesForPlan } from "@/lib/providers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { toast } from "sonner";
 import {
   Plus, Trash2, Box, Eye, EyeOff, Lock, Unlock, Copy, Type, Image as ImageIcon,
-  Star, Layers, ChevronDown, ChevronRight, GripVertical, LayoutGrid, Sparkles,
+  Star, Layers, ChevronDown, ChevronRight, GripVertical, Sparkles,
+  Monitor, Palette, Cpu,
 } from "lucide-react";
 
 // ─── Object Type Icons ────────────────────────────────────────────
@@ -70,58 +76,31 @@ function LayerRow({ obj, index }: { obj: SceneObject; index: number }) {
         <TooltipProvider delayDuration={200}>
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
-                className="p-0.5 rounded hover:bg-secondary"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (!requireFeature("lockHideObjects", "Visibility toggle")) return;
-                  toggleObjectVisibility(obj.id);
-                }}
-              >
+              <button className="p-0.5 rounded hover:bg-secondary" onClick={(e) => { e.stopPropagation(); if (!requireFeature("lockHideObjects", "Visibility toggle")) return; toggleObjectVisibility(obj.id); }}>
                 {isVisible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
               </button>
             </TooltipTrigger>
             <TooltipContent side="right" className="text-[10px]">Toggle visibility</TooltipContent>
           </Tooltip>
-
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
-                className="p-0.5 rounded hover:bg-secondary"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (!requireFeature("lockHideObjects", "Lock toggle")) return;
-                  toggleObjectLock(obj.id);
-                }}
-              >
+              <button className="p-0.5 rounded hover:bg-secondary" onClick={(e) => { e.stopPropagation(); if (!requireFeature("lockHideObjects", "Lock toggle")) return; toggleObjectLock(obj.id); }}>
                 {isLocked ? <Lock className="h-3 w-3 text-warning" /> : <Unlock className="h-3 w-3" />}
               </button>
             </TooltipTrigger>
             <TooltipContent side="right" className="text-[10px]">Toggle lock</TooltipContent>
           </Tooltip>
-
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
-                className="p-0.5 rounded hover:bg-secondary"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (!requireFeature("duplicateObjects", "Duplicate")) return;
-                  duplicateObject(obj.id);
-                }}
-              >
+              <button className="p-0.5 rounded hover:bg-secondary" onClick={(e) => { e.stopPropagation(); if (!requireFeature("duplicateObjects", "Duplicate")) return; duplicateObject(obj.id); }}>
                 <Copy className="h-3 w-3" />
               </button>
             </TooltipTrigger>
             <TooltipContent side="right" className="text-[10px]">Duplicate</TooltipContent>
           </Tooltip>
-
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
-                className="p-0.5 rounded hover:text-destructive"
-                onClick={(e) => { e.stopPropagation(); removeObject(obj.id); }}
-              >
+              <button className="p-0.5 rounded hover:text-destructive" onClick={(e) => { e.stopPropagation(); removeObject(obj.id); }}>
                 <Trash2 className="h-3 w-3" />
               </button>
             </TooltipTrigger>
@@ -137,7 +116,6 @@ function LayerRow({ obj, index }: { obj: SceneObject; index: number }) {
 
 function AddObjectMenu({ onClose }: { onClose: () => void }) {
   const { addObject } = useSceneStore();
-  const { features } = usePlan();
 
   const objectTypes: { type: ObjectType; label: string; icon: typeof Box }[] = [
     { type: "generic", label: "Object", icon: Box },
@@ -182,8 +160,6 @@ function AddObjectMenu({ onClose }: { onClose: () => void }) {
           </button>
         ))}
       </div>
-
-      {/* Preset objects */}
       <div className="mt-2 pt-2 border-t">
         <span className="text-[9px] text-muted-foreground uppercase tracking-wider font-medium">Presets</span>
         <div className="flex flex-wrap gap-1 mt-1">
@@ -205,9 +181,161 @@ function AddObjectMenu({ onClose }: { onClose: () => void }) {
   );
 }
 
+// ─── Artboard Section ─────────────────────────────────────────────
+
+function ArtboardSection({ onAddArtboard }: { onAddArtboard: () => void }) {
+  const [open, setOpen] = useState(true);
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <div className="flex items-center justify-between px-3 py-2 border-b">
+        <CollapsibleTrigger className="flex items-center gap-1 text-[10px] font-display font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors">
+          {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+          <Monitor className="h-3 w-3" />
+          Artboard
+        </CollapsibleTrigger>
+        <Button size="sm" variant="ghost" className="h-5 w-5 p-0" onClick={onAddArtboard}>
+          <Plus className="h-3 w-3" />
+        </Button>
+      </div>
+      <CollapsibleContent>
+        <div className="px-3 py-2 border-b text-[10px] text-muted-foreground">
+          <p>Current artboard is active. Use + to add more artboards.</p>
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+// ─── Provider Section ─────────────────────────────────────────────
+
+function ProviderSection() {
+  const { plan } = usePlan();
+  const { selectedProvider, setSelectedProvider, selectedModel, setSelectedModel, generationMode, setGenerationMode } = useSceneStore();
+  const providers = getProvidersForPlan(plan);
+  const modes = getModesForPlan(plan);
+
+  const currentProvider = providers.find(p => p.id === selectedProvider) || providers[0];
+  const models = currentProvider?.models || [];
+
+  return (
+    <Collapsible defaultOpen={false}>
+      <CollapsibleTrigger className="w-full flex items-center gap-1 px-3 py-2 border-b text-[10px] font-display font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors">
+        <ChevronRight className="h-3 w-3" />
+        <Cpu className="h-3 w-3" />
+        Provider & Model
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="px-3 py-2 border-b space-y-2">
+          <div>
+            <label className="text-[9px] text-muted-foreground uppercase">Mode</label>
+            <Select value={generationMode} onValueChange={(v) => setGenerationMode(v as any)}>
+              <SelectTrigger className="h-7 text-[10px] mt-0.5"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {GENERATION_MODES.map(m => {
+                  const avail = modes.some(x => x.id === m.id);
+                  return <SelectItem key={m.id} value={m.id} disabled={!avail}>{m.name}{!avail && " ↑"}</SelectItem>;
+                })}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="text-[9px] text-muted-foreground uppercase">Provider</label>
+            <Select value={selectedProvider} onValueChange={(v) => { setSelectedProvider(v); const p = providers.find(x => x.id === v); if (p?.models[0]) setSelectedModel(p.models[0].id); }}>
+              <SelectTrigger className="h-7 text-[10px] mt-0.5"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {providers.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="text-[9px] text-muted-foreground uppercase">Model</label>
+            <Select value={selectedModel} onValueChange={setSelectedModel}>
+              <SelectTrigger className="h-7 text-[10px] mt-0.5"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {models.map(m => <SelectItem key={m.id} value={m.id}>{m.name} — {m.quality}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          {currentProvider?.requiresApiKey && (
+            <p className="text-[9px] text-warning">Requires your API key in Settings</p>
+          )}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+// ─── Brand Kit Section ────────────────────────────────────────────
+
+function BrandKitSection() {
+  const { user } = useAuth();
+  const { activeWorkspaceId } = useWorkspace();
+  const { features } = usePlan();
+  const [brandKits, setBrandKits] = useState<any[]>([]);
+  const [selectedKit, setSelectedKit] = useState<string | null>(null);
+  const { updateScene, currentScene } = useSceneStore();
+
+  useEffect(() => {
+    if (!user || !features.brandKit) return;
+    supabase.from("brand_kits").select("id, name, colors, logo_url, style_notes")
+      .or(`user_id.eq.${user.id}${activeWorkspaceId ? `,workspace_id.eq.${activeWorkspaceId}` : ""}`)
+      .then(({ data }) => { if (data) setBrandKits(data); });
+  }, [user, activeWorkspaceId, features.brandKit]);
+
+  const applyKit = (kit: any) => {
+    setSelectedKit(kit.id);
+    // Apply brand kit style notes to scene
+    const overrides: Record<string, string> = {};
+    if (kit.style_notes) overrides.brand_style = kit.style_notes;
+    if (kit.colors) {
+      try {
+        const cols = typeof kit.colors === "string" ? JSON.parse(kit.colors) : kit.colors;
+        if (Array.isArray(cols) && cols.length > 0) overrides.brand_colors = cols.join(", ");
+      } catch {}
+    }
+    updateScene({ style_overrides: { ...currentScene.style_overrides, ...overrides } });
+    toast.success(`Applied "${kit.name}" brand kit`);
+  };
+
+  return (
+    <Collapsible defaultOpen={false}>
+      <CollapsibleTrigger className="w-full flex items-center gap-1 px-3 py-2 border-b text-[10px] font-display font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors">
+        <ChevronRight className="h-3 w-3" />
+        <Palette className="h-3 w-3" />
+        Brand Kit
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="px-3 py-2 border-b">
+          {!features.brandKit ? (
+            <UpgradePrompt feature="Brand kits" planRequired="Pro" compact />
+          ) : brandKits.length === 0 ? (
+            <p className="text-[10px] text-muted-foreground">No brand kits yet. Create one in Settings → Assets.</p>
+          ) : (
+            <div className="space-y-1">
+              {brandKits.map(kit => (
+                <button
+                  key={kit.id}
+                  className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-[10px] transition-colors ${
+                    selectedKit === kit.id ? "bg-primary/10 text-primary ring-1 ring-primary/20" : "hover:bg-secondary"
+                  }`}
+                  onClick={() => applyKit(kit)}
+                >
+                  <Palette className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{kit.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
 // ─── Main Left Sidebar ───────────────────────────────────────────
 
-export function EditorLeftSidebar() {
+export function EditorLeftSidebar({ onAddArtboard }: { onAddArtboard?: () => void }) {
   const { currentScene } = useSceneStore();
   const { features } = usePlan();
   const [showAddMenu, setShowAddMenu] = useState(false);
@@ -217,6 +345,15 @@ export function EditorLeftSidebar() {
 
   return (
     <div className="flex flex-col h-full">
+      {/* Artboard */}
+      <ArtboardSection onAddArtboard={onAddArtboard || (() => toast.info("Multi-artboard coming soon"))} />
+
+      {/* Provider & Model */}
+      <ProviderSection />
+
+      {/* Brand Kit */}
+      <BrandKitSection />
+
       {/* Layers Section */}
       <Collapsible open={layersOpen} onOpenChange={setLayersOpen}>
         <div className="flex items-center justify-between px-3 py-2 border-b">
@@ -256,7 +393,7 @@ export function EditorLeftSidebar() {
               <div className="text-center py-6 text-muted-foreground">
                 <Box className="h-5 w-5 mx-auto mb-1 opacity-30" />
                 <p className="text-[10px]">No objects yet</p>
-                <p className="text-[9px] mt-0.5 opacity-60">Click + to add</p>
+                <p className="text-[9px] mt-0.5 opacity-60">Click + or right-click canvas</p>
               </div>
             ) : (
               <div className="space-y-px">
