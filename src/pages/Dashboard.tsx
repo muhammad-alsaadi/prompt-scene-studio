@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Plus, LogOut, Settings, LayoutTemplate, Sparkles } from "lucide-react";
+import { Plus, Settings, LayoutTemplate, Sparkles, FolderOpen, Zap } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,20 +29,21 @@ interface ProjectRow {
 export default function Dashboard() {
   const navigate = useNavigate();
   const { resetScene } = useSceneStore();
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const { features, workspaceId } = usePlan();
   const { activeWorkspaceId, activeWorkspace } = useWorkspace();
   const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (user && activeWorkspaceId) loadProjects();
   }, [user, activeWorkspaceId]);
 
   const loadProjects = async () => {
-    // Load projects for active workspace, plus personal unlinked
+    setLoading(true);
     const { data } = await supabase
       .from("projects")
       .select("*")
@@ -50,6 +51,7 @@ export default function Dashboard() {
       .is("archived_at", null)
       .order("updated_at", { ascending: false });
     if (data) setProjects(data as ProjectRow[]);
+    setLoading(false);
   };
 
   const createProject = async () => {
@@ -71,7 +73,6 @@ export default function Dashboard() {
     if (error) {
       toast.error(error.message);
     } else if (data) {
-      // Log activity
       if (activeWorkspaceId) {
         await supabase.from("activity_log").insert({
           workspace_id: activeWorkspaceId,
@@ -90,31 +91,23 @@ export default function Dashboard() {
     }
   };
 
-  const handleSignOut = async () => {
-    await signOut();
-    navigate("/");
-  };
-
   return (
     <div className="min-h-screen bg-background">
       <nav className="border-b bg-card/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="container flex items-center justify-between h-14">
           <div className="flex items-center gap-2">
-            <span
-              className="font-display text-lg font-bold gradient-text cursor-pointer"
-              onClick={() => navigate("/")}
-            >
+            <span className="font-display text-lg font-bold gradient-text cursor-pointer" onClick={() => navigate("/")}>
               PromptScene
             </span>
             <WorkspaceSwitcher />
           </div>
           <div className="flex items-center gap-1.5">
             <PlanUsageBadge />
-            <Button variant="ghost" size="sm" onClick={() => navigate("/templates")}>
-              <LayoutTemplate className="h-4 w-4 mr-1.5" />
+            <Button variant="ghost" size="sm" className="text-xs" onClick={() => navigate("/templates")}>
+              <LayoutTemplate className="h-4 w-4 mr-1" />
               <span className="hidden sm:inline">Templates</span>
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => navigate("/settings")}>
+            <Button variant="ghost" size="sm" className="text-xs" onClick={() => navigate("/settings")}>
               <Settings className="h-4 w-4" />
             </Button>
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -132,7 +125,7 @@ export default function Dashboard() {
                   <Input placeholder="Description (optional)" value={newDesc} onChange={(e) => setNewDesc(e.target.value)} />
                   {activeWorkspace?.type === "team" && (
                     <p className="text-[10px] text-muted-foreground">
-                      This project will be created in <strong>{activeWorkspace.name}</strong> and shared with team members.
+                      This project will be shared with <strong>{activeWorkspace.name}</strong> team members.
                     </p>
                   )}
                   <Button className="w-full gradient-primary text-primary-foreground" onClick={createProject}>
@@ -141,9 +134,6 @@ export default function Dashboard() {
                 </div>
               </DialogContent>
             </Dialog>
-            <Button variant="ghost" size="icon" onClick={handleSignOut} className="h-8 w-8">
-              <LogOut className="h-4 w-4" />
-            </Button>
           </div>
         </div>
       </nav>
@@ -159,45 +149,89 @@ export default function Dashboard() {
                 </p>
               )}
             </div>
-            <span className="text-xs text-muted-foreground">{projects.length} project{projects.length !== 1 ? "s" : ""}</span>
+            <span className="text-xs text-muted-foreground">
+              {projects.length} project{projects.length !== 1 ? "s" : ""}
+              {features.maxProjects > 0 && ` of ${features.maxProjects}`}
+            </span>
           </div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {projects.map((p) => (
-              <motion.div
-                key={p.id}
-                whileHover={{ y: -2 }}
-                className="rounded-xl border bg-card overflow-hidden cursor-pointer group transition-shadow hover:shadow-md"
-                onClick={() => navigate(`/builder/${p.id}`)}
-              >
-                {p.preview_image_url ? (
-                  <div className="aspect-video bg-muted overflow-hidden">
-                    <img src={p.preview_image_url} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+          {loading ? (
+            <div className="text-center py-20">
+              <div className="h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+              <p className="text-xs text-muted-foreground">Loading projects...</p>
+            </div>
+          ) : projects.length === 0 ? (
+            /* Empty state */
+            <div className="text-center py-20">
+              <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                <FolderOpen className="h-7 w-7 text-primary" />
+              </div>
+              <h2 className="font-display font-semibold text-lg mb-2">No projects yet</h2>
+              <p className="text-sm text-muted-foreground mb-6 max-w-sm mx-auto">
+                Create your first project or start from a template to begin building structured visual scenes.
+              </p>
+              <div className="flex items-center justify-center gap-3">
+                <Button className="gradient-primary text-primary-foreground text-xs" onClick={() => setDialogOpen(true)}>
+                  <Plus className="h-4 w-4 mr-1" /> New Project
+                </Button>
+                <Button variant="outline" className="text-xs" onClick={() => navigate("/templates")}>
+                  <LayoutTemplate className="h-4 w-4 mr-1" /> Browse Templates
+                </Button>
+              </div>
+
+              {/* Onboarding hints */}
+              <div className="mt-12 grid sm:grid-cols-3 gap-4 max-w-2xl mx-auto text-left">
+                {[
+                  { icon: Sparkles, title: "Write a prompt", desc: "Describe your scene in natural language. AI will structure it into editable objects." },
+                  { icon: LayoutTemplate, title: "Use a template", desc: "Start from a pre-configured scene for product ads, portraits, or creative compositions." },
+                  { icon: Zap, title: "Generate & iterate", desc: "Choose a rendering mode, generate your image, then tweak and regenerate with precision." },
+                ].map(h => (
+                  <div key={h.title} className="rounded-xl border bg-card p-4">
+                    <h.icon className="h-5 w-5 text-primary mb-2" />
+                    <h3 className="font-display font-semibold text-xs mb-1">{h.title}</h3>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">{h.desc}</p>
                   </div>
-                ) : (
-                  <div className="aspect-video bg-muted flex items-center justify-center">
-                    <Sparkles className="h-8 w-8 text-muted-foreground/30" />
-                  </div>
-                )}
-                <div className="p-4">
-                  <h3 className="font-display font-semibold text-sm mb-0.5">{p.name}</h3>
-                  {p.description && <p className="text-xs text-muted-foreground line-clamp-1">{p.description}</p>}
-                  <span className="text-[10px] text-muted-foreground mt-2 block">
-                    {new Date(p.updated_at).toLocaleDateString()}
-                  </span>
-                </div>
-              </motion.div>
-            ))}
-            <div
-              className="rounded-xl border-2 border-dashed border-border flex items-center justify-center cursor-pointer hover:border-primary/40 transition-colors aspect-video sm:aspect-auto sm:min-h-[200px]"
-              onClick={() => setDialogOpen(true)}
-            >
-              <div className="text-center text-muted-foreground">
-                <Plus className="h-6 w-6 mx-auto mb-1.5" />
-                <span className="text-xs">New Project</span>
+                ))}
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {projects.map((p) => (
+                <motion.div
+                  key={p.id}
+                  whileHover={{ y: -2 }}
+                  className="rounded-xl border bg-card overflow-hidden cursor-pointer group transition-shadow hover:shadow-md"
+                  onClick={() => navigate(`/builder/${p.id}`)}
+                >
+                  {p.preview_image_url ? (
+                    <div className="aspect-video bg-muted overflow-hidden">
+                      <img src={p.preview_image_url} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    </div>
+                  ) : (
+                    <div className="aspect-video bg-muted/50 flex items-center justify-center">
+                      <Sparkles className="h-8 w-8 text-muted-foreground/20" />
+                    </div>
+                  )}
+                  <div className="p-4">
+                    <h3 className="font-display font-semibold text-sm mb-0.5">{p.name}</h3>
+                    {p.description && <p className="text-xs text-muted-foreground line-clamp-1">{p.description}</p>}
+                    <span className="text-[10px] text-muted-foreground mt-2 block">
+                      {new Date(p.updated_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                </motion.div>
+              ))}
+              <div
+                className="rounded-xl border-2 border-dashed border-border flex items-center justify-center cursor-pointer hover:border-primary/40 transition-colors aspect-video sm:aspect-auto sm:min-h-[200px]"
+                onClick={() => setDialogOpen(true)}
+              >
+                <div className="text-center text-muted-foreground">
+                  <Plus className="h-6 w-6 mx-auto mb-1.5" />
+                  <span className="text-xs">New Project</span>
+                </div>
+              </div>
+            </div>
+          )}
         </motion.div>
       </div>
     </div>
