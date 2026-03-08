@@ -424,6 +424,30 @@ export function EditorLeftSidebar({ onAddArtboard, projectId }: { onAddArtboard?
   const { features } = usePlan();
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [layersOpen, setLayersOpen] = useState(true);
+  const dragRef = React.useRef<number | null>(null);
+
+  // Drag reorder handlers (operate on reversed display indices → real indices)
+  const reversedObjects = [...currentScene.objects].reverse();
+
+  const handleLayerDragStart = (e: React.DragEvent, displayIdx: number) => {
+    dragRef.current = displayIdx;
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleLayerDragOver = (e: React.DragEvent, _displayIdx: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleLayerDrop = (e: React.DragEvent, displayIdx: number) => {
+    e.preventDefault();
+    if (dragRef.current === null || dragRef.current === displayIdx) return;
+    const total = currentScene.objects.length;
+    const fromReal = total - 1 - dragRef.current;
+    const toReal = total - 1 - displayIdx;
+    moveObjectToIndex(fromReal, toReal);
+    dragRef.current = null;
+  };
 
   const atLimit = features.maxObjectsPerArtboard > 0 && currentScene.objects.length >= features.maxObjectsPerArtboard;
 
