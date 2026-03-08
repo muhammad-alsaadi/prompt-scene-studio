@@ -239,6 +239,16 @@ export const useSceneStore = create<SceneStore>((set, get) => ({
     set({ currentScene: newScene, isDirty: true });
   },
 
+  moveObjectToIndex: (fromIndex, toIndex) => {
+    const { currentScene } = get();
+    const objects = [...currentScene.objects];
+    if (fromIndex < 0 || fromIndex >= objects.length || toIndex < 0 || toIndex >= objects.length) return;
+    const [moved] = objects.splice(fromIndex, 1);
+    objects.splice(toIndex, 0, moved);
+    const newScene = { ...currentScene, objects };
+    set({ currentScene: newScene, isDirty: true });
+  },
+
   selectObject: (id) => set({ selectedObjectId: id }),
 
   rebuildPrompt: () => {
