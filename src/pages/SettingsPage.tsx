@@ -100,7 +100,7 @@ export default function SettingsPage() {
               <h2 className="font-display font-semibold text-sm flex items-center gap-2 mb-4">
                 <Palette className="h-4 w-4 text-primary" /> Brand Kits
               </h2>
-              <SharedBrandKitsPanel />
+              <BrandKitManager />
             </section>
             <section className="rounded-xl border bg-card p-5">
               <h2 className="font-display font-semibold text-sm flex items-center gap-2 mb-4">
