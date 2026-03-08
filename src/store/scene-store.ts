@@ -429,6 +429,8 @@ export const useSceneStore = create<SceneStore>((set, get) => ({
       generationMode: "scene",
       lastJobId: null,
       lastCostUnits: 0,
+      lastLayerOutputs: null,
+      lastGenerationMetadata: null,
     });
   },
 
