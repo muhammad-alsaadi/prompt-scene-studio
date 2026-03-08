@@ -404,12 +404,14 @@ export function EditorLeftSidebar({ onAddArtboard, projectId }: { onAddArtboard?
       {/* Brand Kit */}
       <BrandKitSection />
 
-      {/* Layers Section */}
+      {/* Layers Section — mode-specific header */}
       <Collapsible open={layersOpen} onOpenChange={setLayersOpen}>
         <div className="flex items-center justify-between px-3 py-2 border-b">
           <CollapsibleTrigger className="flex items-center gap-1 text-[10px] font-display font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors">
             {layersOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-            Layers
+            {generationMode === "scene" && "Scene Objects"}
+            {generationMode === "ad_composition" && "Composition Elements"}
+            {generationMode === "advanced_layered" && "Layer Stack"}
             <span className="text-[9px] font-normal ml-1 tabular-nums">({currentScene.objects.length})</span>
           </CollapsibleTrigger>
           <Button
