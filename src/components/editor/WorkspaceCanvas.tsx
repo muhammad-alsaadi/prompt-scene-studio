@@ -131,6 +131,7 @@ function CanvasObject({ obj, zoom, isSelected, isHovered, isPanning, onSelect, o
         transform: rotation ? `rotate(${rotation}deg)` : undefined,
         opacity,
         zIndex: obj.zIndex ?? 1,
+        mixBlendMode: (obj.blendMode as any) || "normal",
         cursor: isLocked ? "not-allowed" : isPanning ? "grab" : dragging ? "grabbing" : "default",
         pointerEvents: isPanning ? "none" : "auto",
       }}
