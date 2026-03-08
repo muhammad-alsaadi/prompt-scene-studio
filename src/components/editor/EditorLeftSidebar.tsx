@@ -524,8 +524,15 @@ export function EditorLeftSidebar({ onAddArtboard, projectId }: { onAddArtboard?
               </div>
             ) : (
               <div className="space-y-px">
-                {[...currentScene.objects].reverse().map((obj, i) => (
-                  <LayerRow key={obj.id} obj={obj} index={currentScene.objects.length - 1 - i} />
+                {reversedObjects.map((obj, i) => (
+                  <LayerRow
+                    key={obj.id}
+                    obj={obj}
+                    index={currentScene.objects.length - 1 - i}
+                    onDragStart={handleLayerDragStart}
+                    onDragOver={handleLayerDragOver}
+                    onDrop={handleLayerDrop}
+                  />
                 ))}
               </div>
             )}
