@@ -31,6 +31,7 @@ export interface SceneObject {
   rotation?: number;
   opacity?: number;
   zIndex?: number;
+  blendMode?: string;
   // State
   visible?: boolean;
   locked?: boolean;

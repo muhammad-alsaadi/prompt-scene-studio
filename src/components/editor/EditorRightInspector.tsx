@@ -1,5 +1,5 @@
 // Right inspector panel — contextual properties for selected object, artboard, or scene
-import React from "react";
+import React, { useState } from "react";
 import { useSceneStore } from "@/store/scene-store";
 import { useEditorStore } from "@/store/editor-store";
 import { usePlan } from "@/hooks/use-plan";
@@ -12,9 +12,12 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import {
   Sun, Camera, Palette, Box, Type, Move, RotateCw, Maximize2, Layers, Eye, Lock,
   Plus, Trash2, Lightbulb, Paintbrush, MessageSquare, Tag, ChevronDown, ChevronRight, ImageIcon,
+  Eraser, Loader2, Blend,
 } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
@@ -261,6 +264,79 @@ function CustomFieldsInspector({ obj }: { obj: SceneObject }) {
   );
 }
 
+// ─── Layer Compositing (Blend Mode + Remove BG) ──────────────────
+
+const BLEND_MODES = [
+  "normal", "multiply", "screen", "overlay", "darken", "lighten",
+  "color-dodge", "color-burn", "hard-light", "soft-light", "difference", "exclusion",
+];
+
+function LayerCompositing({ obj }: { obj: SceneObject }) {
+  const { updateObject } = useSceneStore();
+  const [removingBg, setRemovingBg] = React.useState(false);
+  const id = obj.id;
+  const hasImage = obj.objectType === "uploaded_image" || (obj.asset_url && obj.asset_url.length > 0);
+
+  const handleRemoveBackground = async () => {
+    if (!obj.asset_url) return;
+    setRemovingBg(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("remove-background", {
+        body: { image_url: obj.asset_url },
+      });
+      if (error) throw error;
+      if (data?.transparent_url) {
+        updateObject(id, { asset_url: data.transparent_url });
+        toast.success("Background removed!");
+      } else {
+        throw new Error("No result returned");
+      }
+    } catch (err: any) {
+      console.error("Remove background error:", err);
+      toast.error(err.message || "Failed to remove background");
+    } finally {
+      setRemovingBg(false);
+    }
+  };
+
+  return (
+    <Section icon={Paintbrush} title="Layer">
+      <Field label="Blend Mode">
+        <Select value={obj.blendMode || "normal"} onValueChange={(v) => updateObject(id, { blendMode: v })}>
+          <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {BLEND_MODES.map(m => <SelectItem key={m} value={m} className="capitalize">{m}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field label="Opacity">
+        <div className="flex items-center gap-2">
+          <Slider
+            value={[Math.round((obj.opacity ?? 1) * 100)]}
+            onValueChange={([v]) => updateObject(id, { opacity: v / 100 })}
+            max={100}
+            step={1}
+            className="flex-1"
+          />
+          <span className="text-[10px] text-muted-foreground w-7 text-right tabular-nums">{Math.round((obj.opacity ?? 1) * 100)}%</span>
+        </div>
+      </Field>
+      {hasImage && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full h-7 text-[10px] mt-1"
+          onClick={handleRemoveBackground}
+          disabled={removingBg}
+        >
+          {removingBg ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Eraser className="h-3 w-3 mr-1" />}
+          {removingBg ? "Removing..." : "Remove Background"}
+        </Button>
+      )}
+    </Section>
+  );
+}
+
 // ─── Scene Inspector (when nothing selected) ─────────────────────
 
 function SceneInspector() {
@@ -410,6 +486,7 @@ export function EditorRightInspector() {
       ) : (
         <>
           <TransformInspector obj={selectedObj} />
+          <LayerCompositing obj={selectedObj} />
           <AppearanceInspector obj={selectedObj} />
           {selectedObj.objectType === "text" && <TextInspector obj={selectedObj} />}
           <CreativeInspector obj={selectedObj} />
